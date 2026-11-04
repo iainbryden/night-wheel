@@ -13,7 +13,7 @@ Status: in progress, 2026-11-04. Nothing here is a verified technical capability
 | CMake | Bundled with VS 2019 Build Tools; not on PATH | File check |
 | Windows SDK | 10.0.19041.0; includes `dinput.h` and `hidusage.h` | File check |
 | Rust | 1.99.1, installed by rustup on 2026-11-04 with user approval | Version commands |
-| Game build | User states the latest version is 2.5 (2026-11-04). Installed build and store not yet confirmed | User statement; to be confirmed from the install |
+| Game build | Patch 2.5 on Steam. Exact build number not recorded here | User statement and the cleanup session's report; confirm the build number at P3 |
 
 The Plug and Play name is what Windows reports. Live controls have not been read yet.
 
@@ -47,7 +47,7 @@ See [D16](../decisions/D16-language.md).
 
 Not researched yet. It must be compared before P5 and must not rely on a shared settings mod.
 
-Patch 2.5 coverage mentions official mod support, and the RED4ext v1.31.0 notes refer to an "in-game mod menu". Read CD Projekt Red's patch notes to see whether this gives an official route for an included settings screen. Not confirmed.
+The cleanup session reports that the official 2.5 notes add in-game mod browsing, so a MODS menu entry may be part of the base game. The RED4ext v1.31.0 notes also refer to an "in-game mod menu". Read CD Projekt Red's patch notes directly to see whether this gives an official route for an included settings screen. Browsing mods is not the same as hosting settings, so this is unproven.
 
 ## Next research
 
