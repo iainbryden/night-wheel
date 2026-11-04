@@ -4,4 +4,4 @@ T01-DEVICE,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 20
 T11-AUTO,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,N/A,AUTO,PASS,docs/records/P1-device-read.md,Partial: validation and backup recovery only; no migration or profiles yet; save not tested against crash or power loss
 P1-READ,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 2024.1.0.0,DEVICE,PASS,docs/records/P1-device-read.md,Software reading only; no physical control confirmed by a person
 P1-CONTROLS,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 2024.1.0.0,DEVICE,NOT RUN,,Needs the user at the wheel; this is the P1 gate
-P1-FRESH-BUILD,2026-11-04,None,,N/A,N/A,AUTO,NOT RUN,,Needs a first commit
+P1-FRESH-BUILD,2026-11-04,aac30f85,wd_diag.exe 9b48a2c4,N/A,N/A,AUTO,PASS,docs/records/P1-fresh-build.md,Local clone on this PC only; toolchain and crate cache were already present; no hosted CI exists
