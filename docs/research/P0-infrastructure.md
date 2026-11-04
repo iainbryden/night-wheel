@@ -13,7 +13,7 @@ Status: in progress, 2026-11-04. Nothing here is a verified technical capability
 | CMake | Bundled with VS 2019 Build Tools; not on PATH | File check |
 | Windows SDK | 10.0.19041.0; includes `dinput.h` and `hidusage.h` | File check |
 | Rust | 1.99.1, installed by rustup on 2026-11-04 with user approval | Version commands |
-| Game build | **Unknown; needs the user** | Not searched for, per workspace boundary |
+| Game build | User states the latest version is 2.5 (2026-11-04). Installed build and store not yet confirmed | User statement; to be confirmed from the install |
 
 The Plug and Play name is what Windows reports. Live controls have not been read yet.
 
@@ -34,7 +34,8 @@ P1 needs input only, with no motor output.
 
 | Route | Facts so far | Open |
 |---|---|---|
-| RED4ext loader | MIT; latest release v1.31.0 on 2026-10-24; actively maintained | Compatibility with the user's build |
+| RED4ext loader | MIT; latest release v1.31.0 on 2026-10-24; its notes set patch 2.5 as the minimum game version | Behaviour on the user's installed build |
+| red4ext-rs | MIT; latest commit found bumps it to 0.11.2 on 2026-10-27; no GitHub releases | Whether it supports RED4ext v1.31.0 and patch 2.5 |
 | REDmod | Official tools, with their own EULA | Whether it can host native input code at all |
 | Other routes | Not yet compared | Script-only and overlay frameworks need comparing for settings during pause |
 
@@ -45,6 +46,8 @@ See [D16](../decisions/D16-language.md).
 ## Settings UI during pause
 
 Not researched yet. It must be compared before P5 and must not rely on a shared settings mod.
+
+Patch 2.5 coverage mentions official mod support, and the RED4ext v1.31.0 notes refer to an "in-game mod menu". Read CD Projekt Red's patch notes to see whether this gives an official route for an included settings screen. Not confirmed.
 
 ## Next research
 
