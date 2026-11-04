@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/wd_core", "crates/wd_diag"]
+members = ["crates/wd_core", "crates/wd_device", "crates/wd_diag", "crates/wd_setup"]
 
 [workspace.package]
 version = "0.1.0"

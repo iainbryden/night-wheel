@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 use std::mem::size_of;
 use wd_core::hid_value::{decode_logical, logical_fraction};
+use wd_core::input::{AxisId, AxisState, ButtonId, GENERIC_DESKTOP_PAGE, HAT_USAGE, Sample};
 use windows::Win32::Devices::HumanInterfaceDevice::{
     HIDP_BUTTON_CAPS, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, HidP_GetButtonCaps,
     HidP_GetCaps, HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input,
@@ -18,7 +19,6 @@ use windows::Win32::UI::Input::{
     RIDI_PREPARSEDDATA, RIM_TYPEHID,
 };
 
-const GENERIC_DESKTOP_PAGE: u16 = 0x01;
 const JOYSTICK_USAGE: u16 = 0x04;
 const GAMEPAD_USAGE: u16 = 0x05;
 const MULTI_AXIS_USAGE: u16 = 0x08;
@@ -135,6 +135,45 @@ impl Device {
             feature_report_bytes: caps.FeatureReportByteLength,
             preparsed,
         }))
+    }
+
+    /// Current state in device-independent form.
+    ///
+    /// Only generic desktop controls are included. A hat value outside its reported
+    /// range is treated as not pressed.
+    pub fn sample(&self) -> Sample {
+        let mut sample = Sample {
+            buttons: self
+                .pressed
+                .iter()
+                .map(|&(page, usage)| ButtonId { page, usage })
+                .collect(),
+            ..Sample::default()
+        };
+        for control in &self.values {
+            let Some(value) = control.current else {
+                continue;
+            };
+            if control.page != GENERIC_DESKTOP_PAGE {
+                continue;
+            }
+            if control.usage == HAT_USAGE {
+                if (control.logical_min..=control.logical_max).contains(&value) {
+                    sample.hat = u16::try_from(value - control.logical_min).ok();
+                }
+                continue;
+            }
+            sample.axes.push(AxisState {
+                id: AxisId {
+                    page: control.page,
+                    usage: control.usage,
+                },
+                value,
+                logical_min: control.logical_min,
+                logical_max: control.logical_max,
+            });
+        }
+        sample
     }
 
     /// True when this is the wheel observed on the target PC.

@@ -4,8 +4,6 @@
 //! opens a device for writing, so it has no path for motor or LED output.
 
 #[cfg(windows)]
-mod device;
-#[cfg(windows)]
 mod live;
 mod options;
 

@@ -4,7 +4,10 @@
 //! duplicate or missing key rejects the whole file, so a damaged file can
 //! never be half-applied. Only settings are stored here, never session state.
 
+use crate::assignment::{Action, Bindings};
 use crate::calibration::{CalibrationError, PedalCalibration, SteeringCalibration};
+use crate::input::Control;
+use crate::wizard::{AxisMap, Calibrated};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fmt;
@@ -16,12 +19,24 @@ use std::str::FromStr;
 /// Schema version written by this build.
 pub const FORMAT_VERSION: u32 = 1;
 
+const BINDING_PREFIX: &str = "binding.";
+
+/// The device a configuration was calibrated on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceId {
+    pub vendor: u32,
+    pub product: u32,
+}
+
 /// All persisted settings at this stage.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Config {
+    pub device: DeviceId,
+    pub axes: AxisMap,
     pub steering: SteeringCalibration,
     pub throttle: PedalCalibration,
     pub brake: PedalCalibration,
+    pub bindings: Bindings,
 }
 
 /// Why a configuration could not be parsed or accepted.
@@ -39,6 +54,8 @@ pub enum ConfigError {
     BadValue(&'static str),
     /// The file was written by an unsupported schema version.
     UnsupportedVersion(u32),
+    /// Two of steering, throttle and brake use the same axis.
+    SharedAxis,
     /// The values parsed but failed validation.
     Invalid(CalibrationError),
 }
@@ -54,6 +71,7 @@ impl fmt::Display for ConfigError {
             Self::UnsupportedVersion(version) => {
                 write!(f, "unsupported settings version {version}")
             }
+            Self::SharedAxis => write!(f, "steering, throttle and brake need separate axes"),
             Self::Invalid(error) => write!(f, "{error}"),
         }
     }
@@ -93,8 +111,49 @@ impl Fields {
 }
 
 impl Config {
+    /// Builds settings from a new calibration. Response choices and assignments carry
+    /// over from `previous`, so recalibrating doesn't lose them.
+    pub fn from_calibration(
+        device: DeviceId,
+        calibrated: Calibrated,
+        previous: Option<&Self>,
+    ) -> Self {
+        let mut config = Self {
+            device,
+            axes: calibrated.axes,
+            steering: calibrated.steering,
+            throttle: calibrated.throttle,
+            brake: calibrated.brake,
+            bindings: Bindings::default(),
+        };
+        if let Some(previous) = previous {
+            config.steering.deadzone = previous.steering.deadzone;
+            config.steering.exponent = previous.steering.exponent;
+            config.steering.sensitivity = previous.steering.sensitivity;
+            config.steering.inverted = previous.steering.inverted;
+            for (pedal, old) in [
+                (&mut config.throttle, &previous.throttle),
+                (&mut config.brake, &previous.brake),
+            ] {
+                pedal.rest_deadzone = old.rest_deadzone;
+                pedal.full_deadzone = old.full_deadzone;
+                pedal.exponent = old.exponent;
+                pedal.inverted = old.inverted;
+            }
+            config.bindings = previous.bindings.clone();
+        }
+        config
+    }
+
     /// Checks every value.
     pub fn validate(&self) -> Result<(), ConfigError> {
+        let axes = self.axes;
+        if axes.steering == axes.throttle
+            || axes.steering == axes.brake
+            || axes.throttle == axes.brake
+        {
+            return Err(ConfigError::SharedAxis);
+        }
         self.steering.validate()?;
         self.throttle.validate()?;
         self.brake.validate()?;
@@ -129,7 +188,16 @@ impl Config {
         if version != FORMAT_VERSION {
             return Err(ConfigError::UnsupportedVersion(version));
         }
-        let config = Self {
+        let mut config = Self {
+            device: DeviceId {
+                vendor: fields.take("device.vendor")?,
+                product: fields.take("device.product")?,
+            },
+            axes: AxisMap {
+                steering: fields.take("steering.axis")?,
+                throttle: fields.take("throttle.axis")?,
+                brake: fields.take("brake.axis")?,
+            },
             steering: SteeringCalibration {
                 left: fields.take("steering.left")?,
                 center: fields.take("steering.center")?,
@@ -155,9 +223,17 @@ impl Config {
                 "brake.exponent",
                 "brake.inverted",
             ])?,
+            bindings: Bindings::default(),
         };
-        if let Some(key) = fields.values.into_keys().next() {
-            return Err(ConfigError::UnknownKey(key));
+        for (key, value) in fields.values {
+            let action = key
+                .strip_prefix(BINDING_PREFIX)
+                .and_then(Action::from_key)
+                .ok_or_else(|| ConfigError::UnknownKey(key.clone()))?;
+            let control: Control = value
+                .parse()
+                .map_err(|()| ConfigError::BadValue(action.key()))?;
+            config.bindings.assign(action, control);
         }
         config.validate()?;
         Ok(config)
@@ -168,6 +244,11 @@ impl Config {
         let s = &self.steering;
         let mut text = format!(
             "version = {FORMAT_VERSION}\n\
+             device.vendor = {}\n\
+             device.product = {}\n\
+             steering.axis = {}\n\
+             throttle.axis = {}\n\
+             brake.axis = {}\n\
              steering.left = {}\n\
              steering.center = {}\n\
              steering.right = {}\n\
@@ -175,7 +256,18 @@ impl Config {
              steering.exponent = {}\n\
              steering.sensitivity = {}\n\
              steering.inverted = {}\n",
-            s.left, s.center, s.right, s.deadzone, s.exponent, s.sensitivity, s.inverted
+            self.device.vendor,
+            self.device.product,
+            self.axes.steering,
+            self.axes.throttle,
+            self.axes.brake,
+            s.left,
+            s.center,
+            s.right,
+            s.deadzone,
+            s.exponent,
+            s.sensitivity,
+            s.inverted
         );
         for (name, p) in [("throttle", &self.throttle), ("brake", &self.brake)] {
             text.push_str(&format!(
@@ -187,6 +279,9 @@ impl Config {
                  {name}.inverted = {}\n",
                 p.rest, p.full, p.rest_deadzone, p.full_deadzone, p.exponent, p.inverted
             ));
+        }
+        for (action, control) in self.bindings.iter() {
+            text.push_str(&format!("{BINDING_PREFIX}{} = {control}\n", action.key()));
         }
         text
     }
@@ -308,10 +403,104 @@ pub fn load(path: &Path) -> Result<Loaded, LoadError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::{AxisId, ButtonId};
     use std::sync::atomic::{AtomicU32, Ordering};
+
+    fn axis(usage: u16) -> AxisId {
+        AxisId { page: 1, usage }
+    }
+
+    #[test]
+    fn bindings_round_trip() {
+        let mut config = sample();
+        config.bindings.assign(
+            Action::ShiftUp,
+            Control::Button(ButtonId { page: 9, usage: 5 }),
+        );
+        config.bindings.assign(Action::Horn, Control::Hat(2));
+        assert_eq!(Config::parse(&config.to_text()), Ok(config));
+    }
+
+    #[test]
+    fn unknown_binding_is_rejected() {
+        let text = format!("{}binding.warp = hat:1\n", sample().to_text());
+        assert_eq!(
+            Config::parse(&text),
+            Err(ConfigError::UnknownKey("binding.warp".into()))
+        );
+    }
+
+    #[test]
+    fn malformed_binding_is_rejected() {
+        let text = format!("{}binding.horn = nonsense\n", sample().to_text());
+        assert_eq!(Config::parse(&text), Err(ConfigError::BadValue("horn")));
+    }
+
+    #[test]
+    fn shared_axis_is_rejected() {
+        let mut config = sample();
+        config.axes.brake = config.axes.throttle;
+        assert_eq!(config.validate(), Err(ConfigError::SharedAxis));
+    }
+
+    #[test]
+    fn recalibrating_keeps_response_choices_and_assignments() {
+        let mut previous = sample();
+        previous.bindings.assign(Action::Horn, Control::Hat(1));
+        let calibrated = Calibrated {
+            axes: AxisMap {
+                steering: axis(4),
+                throttle: axis(5),
+                brake: axis(6),
+            },
+            steering: SteeringCalibration {
+                left: 0,
+                center: 50,
+                right: 100,
+                deadzone: 0.0,
+                exponent: 1.0,
+                sensitivity: 1.0,
+                inverted: false,
+            },
+            throttle: PedalCalibration {
+                rest: 0,
+                full: 10,
+                rest_deadzone: 0.0,
+                full_deadzone: 0.0,
+                exponent: 1.0,
+                inverted: false,
+            },
+            brake: PedalCalibration {
+                rest: 0,
+                full: 20,
+                rest_deadzone: 0.0,
+                full_deadzone: 0.0,
+                exponent: 1.0,
+                inverted: false,
+            },
+        };
+        let config = Config::from_calibration(previous.device, calibrated, Some(&previous));
+        assert_eq!(config.steering.left, 0);
+        assert_eq!(config.steering.deadzone, previous.steering.deadzone);
+        assert_eq!(config.steering.inverted, previous.steering.inverted);
+        assert_eq!(config.brake.full, 20);
+        assert_eq!(config.brake.exponent, previous.brake.exponent);
+        assert_eq!(config.bindings, previous.bindings);
+        assert_eq!(config.axes.steering, axis(4));
+    }
 
     fn sample() -> Config {
         Config {
+            device: DeviceId {
+                vendor: 1,
+                product: 2,
+            },
+            axes: AxisMap {
+                steering: axis(0x30),
+                throttle: axis(0x31),
+                brake: axis(0x35),
+            },
+            bindings: Bindings::default(),
             steering: SteeringCalibration {
                 left: -100,
                 center: 3,

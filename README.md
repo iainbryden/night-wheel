@@ -7,7 +7,9 @@ An independently written Logitech G29 driving mod for Cyberpunk 2077 on Windows.
 | Path | Contents |
 |---|---|
 | `crates/wd_core` | Calibration, configuration and HID value logic. No dependencies, no `unsafe` |
+| `crates/wd_device` | Read-only wheel input through Windows Raw Input |
 | `crates/wd_diag` | Standalone wheel diagnostic |
+| `crates/wd_setup` | Setup app: device view, calibration, response settings and assignments |
 | `evidence/`, `docs/` | Source and dependency registers, test results, decisions, reviews |
 
 ## Build
@@ -19,6 +21,14 @@ cargo build --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+## Run the setup app
+
+```
+cargo run -p wd_setup
+```
+
+The app sends nothing to the wheel and nothing to the game. Settings are saved to `%LOCALAPPDATA%\WheelDrive\profile.cfg`, with a backup beside it.
 
 ## Run the diagnostic
 

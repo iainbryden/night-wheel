@@ -5,6 +5,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod assignment;
 pub mod calibration;
 pub mod config;
 pub mod hid_value;
+pub mod input;
+pub mod listen;
+pub mod wizard;
