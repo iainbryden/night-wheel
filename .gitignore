@@ -1,0 +1,12 @@
+# Local records
+/_intake/
+
+# Build output
+/target/
+/build/
+/out/
+
+# Local diagnostics stay local
+/diagnostics/
+*.log
+*.dmp

@@ -1,0 +1,7 @@
+Case_ID,Date,Source_checkpoint,Build_hash,Game_build,Device_driver,Evidence_type,Result,Evidence_path,Limitations
+T01-AUTO,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,N/A,AUTO,PASS,docs/records/P1-device-read.md,Calibration maths and rejection only; no real calibration performed
+T01-DEVICE,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 2024.1.0.0,DEVICE,NOT RUN,,Needs the user at the wheel
+T11-AUTO,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,N/A,AUTO,PASS,docs/records/P1-device-read.md,Partial: validation and backup recovery only; no migration or profiles yet; save not tested against crash or power loss
+P1-READ,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 2024.1.0.0,DEVICE,PASS,docs/records/P1-device-read.md,Software reading only; no physical control confirmed by a person
+P1-CONTROLS,2026-11-04,Uncommitted working tree,wd_diag.exe bd911f77,N/A,G HUB 2024.1.0.0,DEVICE,NOT RUN,,Needs the user at the wheel; this is the P1 gate
+P1-FRESH-BUILD,2026-11-04,None,,N/A,N/A,AUTO,NOT RUN,,Needs a first commit

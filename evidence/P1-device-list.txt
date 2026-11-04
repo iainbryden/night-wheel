@@ -1,0 +1,14 @@
+Read-only listing. Nothing is sent to any device.
+
+VID_046D PID_C24F rev 8900 (observed G29)
+  Top-level usage 0001:0004
+  Report sizes in bytes: input 13, output 17, feature 0
+  Buttons: 25
+  Values: 7
+    Hat         4 bits, reported range 0..=7
+    X          16 bits, reported range 0..=65535
+    Y           8 bits, reported range 0..=255
+    Rz          8 bits, reported range 0..=255
+    Z           8 bits, reported range 0..=255
+    FF00:0001   8 bits, reported range 0..=255
+    FF00:0001   8 bits, reported range 0..=255
