@@ -3,7 +3,7 @@
 Date: 2026-11-04
 Result: PASS
 Evidence type: AUTO
-Source checkpoint and build/package hashes: commit `aac30f85deabba568a3edb69f669b0ac50756756`; debug `wd_diag.exe` from the clone SHA-256 `9b48a2c401b64a46cc00992be4670ba641f4b3be62f85f4c68c889a4588dc92c`
+Source checkpoint and build/package hashes: commit `3a29da4221cdcbec05b4d98da6d468aa6755e18b` (tested as `aac30f85` before the author email was corrected; the file tree is identical); debug `wd_diag.exe` from the clone SHA-256 `9b48a2c401b64a46cc00992be4670ba641f4b3be62f85f4c68c889a4588dc92c`
 Game/Windows/dependency versions: no game; Windows 26H2 build 26300.9818; Rust 1.99.1; dependencies locked by `Cargo.lock`
 Device/driver/firmware: not relevant, apart from the `--list` smoke run below.
 Setup/profile: `git clone` into an empty temporary folder, which was removed afterwards.
