@@ -10,11 +10,12 @@ An independently written Logitech G29 driving mod for Cyberpunk 2077 on Windows.
 | `crates/wd_device` | Read-only wheel input through Windows Raw Input |
 | `crates/wd_diag` | Standalone wheel diagnostic |
 | `crates/wd_setup` | Setup app: device view, calibration, response settings and assignments |
+| `crates/wd_game` | First game load test: a plugin and script that only log |
 | `evidence/`, `docs/` | Source and dependency registers, test results, decisions, reviews |
 
 ## Build
 
-Needs [rustup](https://rustup.rs/) and the Visual Studio C++ build tools. `rust-toolchain.toml` selects the Rust version.
+Needs [rustup](https://rustup.rs/), the Visual Studio C++ build tools, CMake 3.21 or newer and LLVM, all on `PATH`. If `libclang.dll` isn't found, set `LIBCLANG_PATH` to its folder. `rust-toolchain.toml` selects the Rust version.
 
 ```
 cargo build --workspace

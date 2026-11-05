@@ -1,6 +1,6 @@
 # Decision D18: game loading and in-game settings route
 
-Status: proposed, awaiting the user. Nothing here has been tested in the game.
+Status: accepted by the user on 2026-11-04 for building the load test. Nothing here has been tested in the game, and the route can still change on the results.
 Date: 2026-11-04
 Requirements affected: R12 (settings during pause) and everything that runs in the game.
 

@@ -1,0 +1,16 @@
+[package]
+name = "wd_game"
+description = "First game load test: a plugin that only logs, with no motor output or game state changes"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+red4ext-rs = { git = "https://github.com/jac3km4/red4ext-rs", rev = "1ea91e760c0626245449f21e184e9f860b943c48" }
+wd_device = { path = "../wd_device" }
+
+[lints]
+workspace = true
