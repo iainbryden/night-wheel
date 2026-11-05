@@ -20,7 +20,18 @@ Uses the same `PhysicalImpulseEvent` route that moved the car for boost.
 
 All strengths are provisional test values. No vehicle data changes and nothing goes in a save.
 
-## Unknowns
+## Result, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: the car hovered slightly, with no momentum once the wheels were off the ground. The user wants to go further, to a flying vehicle. Readings from the log, once a second:
+
+- **Height works.** On long holds it stayed at about 1.4 to 2.07 above the start, against a target of 2.
+- **Offset pushes turn the car.** So the event's position is honoured. But the heading changed by up to about 330 degrees in a second, with steering values near zero. Nothing damps rotation in the air, so small steering builds into a spin.
+- **Momentum.** Speed fell from about 21 to low single figures within a few seconds. The sideways damping is the likely cause, because a spinning car turns its travel into sideways slide, which is then removed. This is inferred. The game's air resistance may also play a part.
+- **Going back.** The new scenario wrap fired (`wheel-back-scenario`). The pause menu's resume came about 0.5 seconds later in both cases, where before it came at the same moment. Whether the user stayed on the pause menu has not been reported.
+
+A flying vehicle looks possible by the same route, because lift and turning both work. It needs yaw control by measured turn rate, tilt correction, no sideways damping of normal flight, and climb and descent controls. It is not proven. World streaming at height and speed, collisions and game logic for falling vehicles are untested.
+
+## Unknowns at the time of building
 
 - Whether the event's position is honoured. If it is ignored, the opposed pushes cancel out and the wheel won't turn the car. The log records height, speed, steering and heading change once a second.
 - Whether the car stays level. Nothing here corrects tilt.
