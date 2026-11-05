@@ -43,6 +43,42 @@ The script's read runs once per frame in the game's delay system, as a stand-in 
 - Hidden test text widgets remain on the menu layer until the game closes. A leftover is expected for this test only.
 - Whether the text appears depends on `inkMenuLayer` holding the pause menu in 2.5, which comes from community data dated to patch 2.12.
 
+## Game run, 2026-11-04 19:48
+
+Approved by the user; both files replaced and hash-checked. Resolve, CurseForge and Chrome were found closed after the run.
+
+| Question | Result | Evidence |
+|---|---|---|
+| Can text be drawn during pause? | **Yes** | User saw it; `text-shown` |
+| Does it hide on resume? | **Yes** | User report |
+| Does keyboard input work during pause? | **Yes** | Comma and period changed VALUE on screen; 50 key presses logged while paused |
+| Does the display update live during pause? | **No, with this callback** | Delay callback ran only in the seconds around each transition; about 123 seconds without a read during the long pause |
+| Does X change? | **No, with two causes** | See below |
+| Crash or changed saves? | None | No new crash report; only `user.gls` changed |
+
+### Why X was frozen
+
+1. The per-frame delay callback largely stops during pause, so nothing refreshed the text. Key presses refreshed it, but with no new value read.
+2. **The wheel left the system 16 seconds before the pause.** The log has `controller disconnected` at 19:50:55, with the last report at about 19:50:39 and none afterward. The first test read 13,790 reports during pause, so this was not caused by pausing.
+
+After the run, Windows no longer listed the wheel as `VID_046D PID_C24F`. It listed the same USB port as `VID_046D PID_C260`, "G29 Driving Force Racing Wheel (PS4)" on the `LGHUBWinUSB` driver, and `wd_diag --list` found no game controllers. The G HUB main process was not running, only its updater. The cause of the switch is not established. The plugin has no device-write path, but that alone does not rule out an indirect effect.
+
+### Timing in play, before the disconnect
+
+| Measure | Result |
+|---|---|
+| Wheel reports while moving | Average 390 per second, up to 504; about 2 to 2.6 ms apart |
+| Decoding, from starting to handle a report to publishing | Typically at most 2 to 4 microseconds; worst 112 microseconds |
+| Game reads | Median 70 per second, about 14 ms apart; range 50 to 83 per second from 80 to 140 s; worst gap 312 ms |
+| Value age at read | Typically at most 1 to 2 ms; sampled worst 9 to 17 ms |
+
+Reports only arrive when something changes, so slow movement inflates value age. Percentiles are bucket upper bounds. The read rate is a callback rate, used as a stand-in for frame rate. On these numbers, the game's update interval is far larger than the plugin's own decoding time.
+
+### Findings for the product
+
+- Wheel mode can change while the game runs, leaving a device this code cannot read. The mod must detect it and say so, and must release any held inputs.
+- A live in-game calibration screen needs a pause-safe update, not the delay system.
+
 ## Next step
 
-Get approval to replace the two test files in the game, then run it with other heavy software closed.
+Restore the wheel to `PID_C24F`, find what caused the switch, and retest the live display with a pause-safe update.
