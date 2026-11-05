@@ -138,8 +138,8 @@ Approved by the user; files replaced and hash-checked. About 20 minutes, with a 
 - **Radio:** next, previous, on/off and volume all logged working values. Next changed the station index in order 14, 3, 7, and previous stepped back through 3, 14, 2. Volume moved by 5, between 55 and 90.
 - **Other functions:** handbrake, look behind, change camera, radio menu and combat mode fired. What the game did with them has not been reported.
 - **Sections:** the user wrote "Selections look correct", which may mean sections.
-- **Slow walking:** the user reports V walks very slowly and standing up after leaving the car. No function fired in any on-foot second of the log. The game maps its `ToggleWalk` action to the G key (SRC-032), and G is also the keyboard's Autodrive key in a vehicle. So a G press on foot is a candidate, along with the mod's constant gamepad presence, a walk-only area and status effects. Not established.
+- **Slow walking:** the user reports V walks very slowly and standing up after leaving the car. No function fired in any on-foot second of the log. The game maps its `ToggleWalk` action to the G key (SRC-032), and G is also the keyboard's Autodrive key in a vehicle. The user reports that pressing G on foot fixes it, so this was the game's walk toggle and not a mod fault. How the toggle got set was not established. Help text could warn about G, since it does different things in and out of a car.
 
 ## Next step
 
-The user tries G on foot at the next launch. Then fix going back, decide the Autodrive handling and choose a steering speed.
+Fix going back, decide the Autodrive handling and choose a steering speed.
