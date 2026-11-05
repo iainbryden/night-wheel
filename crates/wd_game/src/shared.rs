@@ -139,6 +139,25 @@ pub fn record_applied(thumb: i16) {
     }
 }
 
+/// Most response samples logged per launch, which is a few minutes of driving.
+const MAX_SAMPLES: u32 = 15_000;
+static SAMPLES: AtomicU32 = AtomicU32::new(0);
+
+fn format_sample(time_us: u64, stick: i32, turn: f32, yaw: f32, speed: f32) -> String {
+    format!("sample {time_us} {stick} {turn:.4} {yaw:.3} {speed:.2}")
+}
+
+/// One frame's stick, steering action, heading and speed, or nothing past the limit.
+/// This allocates, so it belongs only to this measurement build.
+pub fn response_sample(turn: f32, yaw: f32, speed: f32) -> Option<String> {
+    if SAMPLES.fetch_add(1, Ordering::Relaxed) >= MAX_SAMPLES {
+        return None;
+    }
+    let now = micros_since_start(Instant::now());
+    let stick = LAST_THUMB.load(Ordering::Relaxed);
+    Some(format_sample(now, stick, turn, yaw, speed))
+}
+
 fn curve_bucket(thumb: i32) -> usize {
     let offset = (thumb + 32768).clamp(0, 65535) as usize;
     offset * CURVE_BUCKETS / 65536
@@ -222,8 +241,16 @@ pub fn stats_line() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CURVE_BUCKETS, curve_bucket, format_curve, format_summary};
+    use super::{CURVE_BUCKETS, curve_bucket, format_curve, format_sample, format_summary};
     use crate::latency::Summary;
+
+    #[test]
+    fn a_sample_is_one_parseable_line() {
+        assert_eq!(
+            format_sample(12, -300, 0.25, 90.5, 3.0),
+            "sample 12 -300 0.2500 90.500 3.00"
+        );
+    }
 
     #[test]
     fn stick_values_land_in_the_table() {

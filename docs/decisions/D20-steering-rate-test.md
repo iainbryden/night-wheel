@@ -53,3 +53,15 @@ Approved by the user; TweakXL added and the script replaced, all hash-checked. T
 ## Reversal
 
 Removing TweakXL and the script lines ends it. Stock values return on the next launch regardless.
+
+## Measurement build, 2026-11-04
+
+Built to close the gaps above; not yet run in the game. Plugin 0.6.0 and script hashes are in `evidence/TEST_RESULTS.csv`.
+
+- **Read-back:** each time the player becomes the driver, the log shows the four values read through the vehicle's record, the applied level and the vehicle's entity ID.
+- **New car:** the test procedure includes calling a different vehicle after setting a level.
+- **Response samples:** each frame while driving and not paused, up to 15,000 per launch, the log gets time, stick value, game steering action, vehicle heading and speed. This allocates on the game's thread and belongs to this build only. Script and plugin values are sampled at slightly different moments.
+
+No tire or steering angle was found exposed to scripts. Heading change while moving is a proxy: it covers the game's steering and the car's physics together, and cannot separate them. It gives no result while parked.
+
+Names such as `GetWorldYaw` and `GetCurrentSpeed` were checked only by compiling against the game's scripts.

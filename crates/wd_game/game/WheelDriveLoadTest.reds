@@ -11,6 +11,7 @@ native func WheelDriveTest_Read() -> Int32;
 native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
 native func WheelDriveTest_SteeringAction(value: Float);
+native func WheelDriveTest_Sample(turn: Float, yaw: Float, speed: Float);
 
 public class WheelDriveTestTick extends DelayCallback {
     public let service: wref<WheelDriveTestService>;
@@ -31,6 +32,7 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_hasDriveModel: Bool;
     private let m_stock: array<Float>;
     private let m_appliedLevel: Int32;
+    private let m_turn: Float;
     private let m_paused: Bool;
     private let m_steering: Int32;
     private let m_keys: Int32;
@@ -117,6 +119,12 @@ public class WheelDriveTestService extends ScriptableService {
         let player = GetPlayer(game);
         let driving = IsDefined(player) && VehicleComponent.IsDriver(game, player);
         WheelDriveTest_SetDriving(driving);
+        if driving && !this.m_paused {
+            let vehicle = GetMountedVehicle(player);
+            if IsDefined(vehicle) {
+                WheelDriveTest_Sample(this.m_turn, vehicle.GetWorldYaw(), vehicle.GetCurrentSpeed());
+            }
+        }
         if NotEquals(driving, this.m_driving) {
             this.m_driving = driving;
             WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
@@ -125,6 +133,7 @@ public class WheelDriveTestService extends ScriptableService {
                 this.ReportVehicle(player);
                 this.FindDriveModel(player);
                 this.ApplyLevel();
+                this.ReportRates(player);
             }
         }
     }
@@ -139,7 +148,8 @@ public class WheelDriveTestService extends ScriptableService {
 
     protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
         if Equals(ListenerAction.GetName(action), n"TurnX") {
-            WheelDriveTest_SteeringAction(ListenerAction.GetValue(action));
+            this.m_turn = ListenerAction.GetValue(action);
+            WheelDriveTest_SteeringAction(this.m_turn);
         }
     }
 
@@ -286,6 +296,18 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_stock = stock;
         this.m_hasDriveModel = true;
         this.m_appliedLevel = 0;
+    }
+
+    // Reads the values through the record, which shows whether a change reached it.
+    private func ReportRates(player: ref<PlayerPuppet>) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        let model = vehicle.GetRecord().VehDriveModelDataHandle();
+        if IsDefined(model) {
+            WheelDriveTest_Event(s"rate: now level \(this.m_appliedLevel) entity \(EntityID.ToDebugString(vehicle.GetEntityID())) fast \(FloatToString(model.TurnUpdateInputFastChangeSpeed())) slow \(FloatToString(model.TurnUpdateInputSlowChangeSpeed())) add \(FloatToString(model.WheelTurnMaxAddPerSecond())) sub \(FloatToString(model.WheelTurnMaxSubPerSecond()))");
+        }
     }
 
     private func ApplyLevel() {

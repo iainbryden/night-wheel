@@ -31,7 +31,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 5, 0);
+    const VERSION: SemVer = SemVer::new(0, 6, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -41,13 +41,14 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_Key", key)),
             GlobalExport(global!(c"WheelDriveTest_SetDriving", set_driving)),
             GlobalExport(global!(c"WheelDriveTest_SteeringAction", steering_action)),
+            GlobalExport(global!(c"WheelDriveTest_Sample", sample)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.5.0".to_owned());
+        log_file::send("plugin loaded, version 0.6.0".to_owned());
         load_profile();
         xinput_hook::attach(env);
         let map = shared::PROFILE.get().map(|profile| profile.axes);
@@ -101,6 +102,12 @@ fn set_driving(driving: bool) {
 
 fn steering_action(value: f32) {
     shared::record_steering_action(value);
+}
+
+fn sample(turn: f32, yaw: f32, speed: f32) {
+    if let Some(line) = shared::response_sample(turn, yaw, speed) {
+        log_file::send(line);
+    }
 }
 
 fn ping(value: i32) -> i32 {
