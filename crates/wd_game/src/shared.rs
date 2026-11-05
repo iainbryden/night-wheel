@@ -31,6 +31,8 @@ static LAST_READ_US: AtomicU64 = AtomicU64::new(NEVER);
 static REPORTS: AtomicU32 = AtomicU32::new(0);
 static KEYS: AtomicU32 = AtomicU32::new(0);
 static TOTAL_KEYS: AtomicU32 = AtomicU32::new(0);
+static BUTTONS: AtomicU64 = AtomicU64::new(0);
+static HAT: AtomicI32 = AtomicI32::new(NO_READING);
 /// The steering speed multiplier for this launch, set once before the game asks for it.
 static STEERING_SPEED: OnceLock<f32> = OnceLock::new();
 
@@ -56,8 +58,13 @@ fn micros_since_start(instant: Instant) -> u64 {
 }
 
 /// Called by the wheel reader for each wheel report.
-pub fn record_report(axes: [Option<i64>; 3], received: Instant) {
+pub fn record_report(axes: [Option<i64>; 3], buttons: u64, hat: Option<i64>, received: Instant) {
     let now = Instant::now();
+    BUTTONS.store(buttons, Ordering::Relaxed);
+    HAT.store(
+        hat.map_or(NO_READING, |value| value as i32),
+        Ordering::Relaxed,
+    );
     for (slot, value) in AXES.iter().zip(axes) {
         if let Some(value) = value {
             slot.store(value as i32, Ordering::Relaxed);
@@ -104,6 +111,8 @@ pub fn clear_axes() {
     for axis in &AXES {
         axis.store(NO_READING, Ordering::Relaxed);
     }
+    BUTTONS.store(0, Ordering::Relaxed);
+    HAT.store(NO_READING, Ordering::Relaxed);
 }
 
 /// Whether the wheel may control the game at this moment.
@@ -181,6 +190,29 @@ pub fn curve_line() -> String {
     format_curve(values)
 }
 
+/// The buttons held now as text, for the settings screen. It allocates, so it runs only while
+/// that screen is open and never on the steering path.
+pub fn held_controls() -> String {
+    format_held(BUTTONS.load(Ordering::Relaxed), HAT.load(Ordering::Relaxed))
+}
+
+/// Names controls only by the numbers they report, which says nothing of where they are on the
+/// wheel. The hat counts as held only within its reported 0 to 7.
+fn format_held(buttons: u64, hat: i32) -> String {
+    let mut names: Vec<String> = (0..64)
+        .filter(|bit| buttons & (1u64 << bit) != 0)
+        .map(|bit| format!("BUTTON {}", bit + 1))
+        .collect();
+    if (0..=7).contains(&hat) {
+        names.push(format!("HAT {hat}"));
+    }
+    if names.is_empty() {
+        "NONE".to_owned()
+    } else {
+        names.join(" + ")
+    }
+}
+
 pub fn set_steering_speed(value: f32) {
     let _ = STEERING_SPEED.set(value);
 }
@@ -235,8 +267,25 @@ pub fn stats_line() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CURVE_BUCKETS, curve_bucket, format_curve, format_summary};
+    use super::{
+        CURVE_BUCKETS, NO_READING, curve_bucket, format_curve, format_held, format_summary,
+    };
     use crate::latency::Summary;
+
+    #[test]
+    fn nothing_held_reads_as_none() {
+        assert_eq!(format_held(0, NO_READING), "NONE");
+        assert_eq!(format_held(0, 8), "NONE");
+        assert_eq!(format_held(0, 15), "NONE");
+    }
+
+    #[test]
+    fn held_controls_are_listed_by_their_reported_numbers() {
+        assert_eq!(format_held(0b1, 8), "BUTTON 1");
+        assert_eq!(format_held(0b101, 0), "BUTTON 1 + BUTTON 3 + HAT 0");
+        assert_eq!(format_held(0, 7), "HAT 7");
+        assert_eq!(format_held(1u64 << 63, 8), "BUTTON 64");
+    }
 
     #[test]
     fn stick_values_land_in_the_table() {

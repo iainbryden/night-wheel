@@ -22,6 +22,11 @@ const DISPLAY_AXIS: AxisId = AxisId {
     usage: 0x30,
 };
 
+const HAT: AxisId = AxisId {
+    page: 0x01,
+    usage: 0x39,
+};
+
 fn reading(device: &Device, axis: AxisId) -> Option<i64> {
     device.value(axis.page, axis.usage)
 }
@@ -53,7 +58,12 @@ impl WheelReader {
                         device, received, ..
                     } => {
                         if device.is_observed_target() {
-                            shared::record_report(readings(device, map), received);
+                            shared::record_report(
+                                readings(device, map),
+                                device.held_buttons,
+                                reading(device, HAT),
+                                received,
+                            );
                         }
                     }
                     Event::Connected(device) => {

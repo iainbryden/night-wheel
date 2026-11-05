@@ -7,7 +7,9 @@
 use std::collections::BTreeSet;
 use std::mem::size_of;
 use wd_core::hid_value::{decode_logical, logical_fraction};
-use wd_core::input::{AxisId, AxisState, ButtonId, GENERIC_DESKTOP_PAGE, HAT_USAGE, Sample};
+use wd_core::input::{
+    AxisId, AxisState, ButtonId, GENERIC_DESKTOP_PAGE, HAT_USAGE, Sample, button_mask,
+};
 use windows::Win32::Devices::HumanInterfaceDevice::{
     HIDP_BUTTON_CAPS, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, HidP_GetButtonCaps,
     HidP_GetCaps, HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input,
@@ -28,6 +30,9 @@ const OBSERVED_TARGET: (u32, u32) = (0x046D, 0xC24F);
 
 /// Upper limit on buttons reported as held in one report page.
 const MAX_USAGES: usize = 256;
+
+/// The HID usage page for numbered buttons.
+const BUTTON_PAGE: u16 = 0x09;
 
 /// One value control, such as an axis or hat switch.
 #[derive(Debug)]
@@ -68,6 +73,8 @@ pub struct Device {
     button_pages: Vec<(u16, u16)>,
     pub button_count: usize,
     pub pressed: BTreeSet<(u16, u16)>,
+    /// Held numbered buttons as bits, kept current by [`Device::apply_values`].
+    pub held_buttons: u64,
     pub reports: u64,
     pub input_report_bytes: u16,
     pub output_report_bytes: u16,
@@ -129,6 +136,7 @@ impl Device {
             button_pages,
             button_count,
             pressed: BTreeSet::new(),
+            held_buttons: 0,
             reports: 0,
             input_report_bytes: caps.InputReportByteLength,
             output_report_bytes: caps.OutputReportByteLength,
@@ -202,12 +210,41 @@ impl Device {
             .and_then(|control| control.current)
     }
 
-    /// Decodes only value controls and allocates nothing, for the low-latency path.
+    /// Decodes value controls and held buttons and allocates nothing, for the low-latency path.
     pub fn apply_values(&mut self, report: &mut [u8]) {
         self.reports += 1;
         let parsed = PHIDP_PREPARSED_DATA(self.preparsed.as_ptr() as isize);
         for control in &mut self.values {
             decode_value(control, parsed, report);
+        }
+        let mut held = 0;
+        let mut decoded_any = false;
+        for &(page, link) in &self.button_pages {
+            if page != BUTTON_PAGE {
+                continue;
+            }
+            let mut usages = [0u16; MAX_USAGES];
+            let mut length = MAX_USAGES as u32;
+            // SAFETY: `usages` holds `length` items, and the other pointers are valid for the call.
+            let status = unsafe {
+                HidP_GetUsages(
+                    HidP_Input,
+                    page,
+                    Some(link),
+                    usages.as_mut_ptr(),
+                    &mut length,
+                    parsed,
+                    report,
+                )
+            };
+            if status == HIDP_STATUS_SUCCESS {
+                decoded_any = true;
+                held |= button_mask(&usages[..length as usize]);
+            }
+        }
+        // A report that carries no buttons says nothing about them, so the last state stands.
+        if decoded_any {
+            self.held_buttons = held;
         }
     }
 

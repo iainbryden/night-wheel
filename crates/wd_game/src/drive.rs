@@ -136,8 +136,13 @@ mod tests {
 
     #[test]
     fn a_valid_steering_speed_is_read_with_surrounding_space() {
-        assert_eq!(parse_steering_speed(" 4
-"), Some(4.0));
+        assert_eq!(
+            parse_steering_speed(
+                " 4
+"
+            ),
+            Some(4.0)
+        );
         assert_eq!(parse_steering_speed("1"), Some(1.0));
         assert_eq!(parse_steering_speed("10.0"), Some(10.0));
     }

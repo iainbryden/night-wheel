@@ -1,8 +1,8 @@
 // Game test. Tells the plugin each frame whether the player is driving, because the wheel must
 // only apply then. Four steering speed values are multiplied in memory when the game starts, for
 // every vehicle drive model, by an amount the plugin supplies. Nothing is saved.
-// During pause, it tests one way into a settings screen: a WHEEL entry in the pause menu, with the
-// period key as a fallback. The screen only shows live values and has no settings yet.
+// During pause, it tests one way into a settings screen: a WHEEL SETTINGS entry in the pause menu,
+// with the period key as a fallback. The screen only shows live values and has no settings yet.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -11,6 +11,7 @@ native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
 native func WheelDriveTest_SteeringAction(value: Float);
 native func WheelDriveTest_SteeringSpeed() -> Float;
+native func WheelDriveTest_HeldControls() -> String;
 
 public class WheelDriveStartupRates extends ScriptableTweak {
     protected cb func OnApply() -> Void {
@@ -39,7 +40,7 @@ public class WheelDriveStartupRates extends ScriptableTweak {
     }
 }
 
-// Adds the WHEEL entry after the game's own entries, and leaves those entries to the game.
+// Adds the WHEEL SETTINGS entry after the game's own entries, and leaves those entries to the game.
 @wrapMethod(PauseMenuGameController)
 private func PopulateMenuItemList() -> Void {
     wrappedMethod();
@@ -84,9 +85,10 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_refresh: ref<inkAnimProxy>;
     private let m_screen: ref<inkCanvas>;
     private let m_screenText: ref<inkText>;
+    private let m_held: String;
 
     public static func EntryLabel() -> String {
-        return "WHEEL";
+        return "WHEEL SETTINGS";
     }
 
     private cb func OnLoad() {
@@ -224,7 +226,7 @@ public class WheelDriveTestService extends ScriptableService {
         hint.SetAnchor(inkEAnchor.TopCenter);
         hint.SetAnchorPoint(0.5, 0.0);
         hint.SetMargin(new inkMargin(0.0, 40.0, 0.0, 0.0));
-        hint.SetText("WHEEL TEST  PICK WHEEL IN THIS MENU OR PRESS PERIOD");
+        hint.SetText("NIGHT WHEEL TEST  PERIOD ALSO OPENS WHEEL SETTINGS");
         hint.Reparent(layer.GetVirtualWindow());
         this.m_hint = hint;
         this.StartRefresh();
@@ -276,7 +278,7 @@ public class WheelDriveTestService extends ScriptableService {
         let back = new inkRectangle();
         back.SetAnchor(inkEAnchor.Centered);
         back.SetAnchorPoint(0.5, 0.5);
-        back.SetSize(new Vector2(1500.0, 420.0));
+        back.SetSize(new Vector2(1500.0, 520.0));
         back.SetTintColor(new HDRColor(0.03, 0.03, 0.05, 1.0));
         back.Reparent(canvas);
 
@@ -319,7 +321,12 @@ public class WheelDriveTestService extends ScriptableService {
 
     private func UpdateScreen() {
         if IsDefined(this.m_screenText) {
-            this.m_screenText.SetText(s"WHEEL SCREEN TEST\nSTEERING VALUE \(this.m_steering)\nSTEERING SPEED X\(FloatToString(WheelDriveTest_SteeringSpeed()))\nPERIOD CLOSES THIS");
+            let held = WheelDriveTest_HeldControls();
+            if NotEquals(held, this.m_held) {
+                this.m_held = held;
+                WheelDriveTest_Event(s"held: \(held)");
+            }
+            this.m_screenText.SetText(s"NIGHT WHEEL\nSTEERING VALUE \(this.m_steering)\nHOLDING \(held)\nSTEERING SPEED X\(FloatToString(WheelDriveTest_SteeringSpeed()))\nPERIOD CLOSES THIS");
         }
     }
 }

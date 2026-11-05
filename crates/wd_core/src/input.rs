@@ -136,8 +136,33 @@ impl Sample {
     }
 }
 
+/// A set of held buttons as bits, with usage 1 in the lowest bit. Usages outside 1 to 64 are left
+/// out. Allocates nothing, so it can run for every wheel report.
+pub fn button_mask(usages: &[u16]) -> u64 {
+    usages.iter().fold(0, |mask, &usage| {
+        if (1..=64).contains(&usage) {
+            mask | 1u64 << (usage - 1)
+        } else {
+            mask
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn button_mask_sets_one_bit_for_each_usage() {
+        assert_eq!(super::button_mask(&[]), 0);
+        assert_eq!(super::button_mask(&[1]), 1);
+        assert_eq!(super::button_mask(&[1, 3]), 0b101);
+        assert_eq!(super::button_mask(&[64]), 1u64 << 63);
+    }
+
+    #[test]
+    fn button_mask_leaves_out_usages_it_cannot_hold() {
+        assert_eq!(super::button_mask(&[0, 65, 500]), 0);
+    }
+
     use super::*;
 
     #[test]
