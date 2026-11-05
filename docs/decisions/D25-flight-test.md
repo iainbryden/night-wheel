@@ -16,6 +16,30 @@ Date: 2026-11-05
 
 All strengths are provisional test values. No vehicle data changes and nothing goes in a save.
 
+## First run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: "Hover is not that great. It lifts off the ground slightly, or it hops." The game was still open when the log was read, and it closed before the second build was made.
+
+- **Sustained flight happened.** From 87 to 102 seconds, the car held about 2.2 to 3.2 metres above its start, at speeds up to about 43, with pitch and roll mostly within about 0.1.
+- **Slight lift is explained.** The target was only 3 metres, and Climb and Descend were never bound.
+- **Unexpected climb.** From about 103 seconds, the car rose over 100 metres above a 3 metre target, while boost was held. It kept rising at several metres a second for seconds after release, with calculated lift at its lower limit of zero. Boost pushed along the nose, which explains part of this. Why gravity didn't bring it down sooner isn't explained.
+- **Hopping.** From 428 and 479 seconds, the car stayed about 2 to 4 metres below its start, with vertical speed swinging between about -8 and +4, and calculated lift should have been high. Whether this was terrain or something holding the car down isn't known. The hop may also come from quick on and off presses seen at 438 seconds.
+- **Turning.** A steering value of 0.5 gave about 12 degrees a second, against 30 wanted.
+- **Not reported:** whether Esc stayed on the pause menu, and the map. This run logged no use of the settings page.
+
+## Second build
+
+Plugin 0.18.0. `wd_game.dll` SHA-256 `d588afe221537309bcd7d8a04bfa2805a2acd1cff1f717dd08992852ef2e70f8`; `WheelDriveLoadTest.reds` SHA-256 `166b12bb4372f3b4ba236d284e711231d7e4a16dc41a700e0b766ec4de0890cf`. Staged in `out/flight2-test/`. Not run in the game.
+
+- Lift-off goes to 15 metres.
+- Height control can now push down, from -15 to +40 m/s².
+- Climb and Descend are 12 metres a second.
+- Boost adds level thrust in flight, and its normal push is off while flying.
+- Turning correction is more than doubled.
+- The log adds calculated lift.
+
+Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Unknowns
 
 - Whether the car's inertia suits these values. The first version may wobble or feel wrong.

@@ -333,6 +333,10 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         this.ReportEngine(vehicle);
+        if this.m_flying {
+            this.EndBoost("flying");
+            return;
+        }
         let id = vehicle.GetEntityID();
         if NotEquals(id, this.m_boostVehicle) {
             this.m_boostVehicle = id;
@@ -394,7 +398,7 @@ public class WheelDriveTestService extends ScriptableService {
                 this.m_flying = true;
                 this.m_landing = false;
                 this.m_flightStart = position.Z;
-                this.m_flightTarget = position.Z + 3.0;
+                this.m_flightTarget = position.Z + 15.0;
                 this.m_flightLastYaw = vehicle.GetWorldYaw();
                 this.m_flightYawRate = 0.0;
                 let startForward = vehicle.GetWorldForward();
@@ -423,13 +427,13 @@ public class WheelDriveTestService extends ScriptableService {
         let held = WheelDriveTest_ScriptHeld();
         let climb = 0.0;
         if (held & 128) != 0 {
-            climb += 8.0;
+            climb += 12.0;
         }
         if (held & 256) != 0 {
-            climb -= 8.0;
+            climb -= 12.0;
         }
         this.m_flightTarget = ClampF(this.m_flightTarget + climb * elapsed, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
-        let wantedRise = ClampF((this.m_flightTarget - position.Z) * 1.5, -8.0, 8.0);
+        let wantedRise = ClampF((this.m_flightTarget - position.Z) * 1.5, -12.0, 12.0);
         if this.m_landing {
             wantedRise = -4.0;
             this.m_landingStill = AbsF(velocity.Z) < 0.5 ? this.m_landingStill + elapsed : 0.0;
@@ -438,7 +442,8 @@ public class WheelDriveTestService extends ScriptableService {
                 return;
             }
         }
-        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, 0.0, 25.0);
+        // Below zero pushes down, because the car was seen to keep rising with no lift at all.
+        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, -15.0, 40.0);
 
         // Turn rate, in degrees a second, with a positive wheel turning the heading negative.
         let yaw = vehicle.GetWorldYaw();
@@ -452,7 +457,7 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_flightLastYaw = yaw;
         this.m_flightYawRate = this.m_flightYawRate * 0.5 + (yawStep / elapsed) * 0.5;
         let yawError = -this.m_turn * 60.0 - this.m_flightYawRate;
-        let turnPush = ClampF(-Deg2Rad(yawError) * 2.7, -12.0, 12.0);
+        let turnPush = ClampF(-Deg2Rad(yawError) * 6.0, -15.0, 15.0);
 
         // Level, from how far the nose and right side are above level and how fast they move.
         let pitch = forward.Z;
@@ -469,6 +474,12 @@ public class WheelDriveTestService extends ScriptableService {
         let aheadY = flat > 0.1 ? forward.Y / flat : 0.0;
         let along = velocity.X * aheadX + velocity.Y * aheadY;
         let thrust = along < 70.0 ? WheelDriveTest_Throttle() * 12.0 : 0.0;
+        // Boost adds level thrust here, so it can't carry the car upward as it did when it pushed
+        // along the nose.
+        let boostPercent = Cast<Float>(WheelDriveTest_BoostPercent());
+        if WheelDriveTest_BoostWanted() && along < 70.0 * (1.0 + boostPercent / 100.0) {
+            thrust += MinF(6.0 + boostPercent * 0.12, 30.0);
+        }
         let travel = SqrtF(velocity.X * velocity.X + velocity.Y * velocity.Y);
         let braking = travel > 0.5 ? WheelDriveTest_Brake() * 10.0 / travel : 0.0;
         let slide = velocity.X * right.X + velocity.Y * right.Y;
@@ -495,7 +506,7 @@ public class WheelDriveTestService extends ScriptableService {
 
         if now - this.m_flightLogged >= 1.0 {
             this.m_flightLogged = now;
-            WheelDriveTest_Event(s"flight: up \(FloatToString(position.Z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), rise \(FloatToString(velocity.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed())), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), pitch \(FloatToString(pitch)), roll \(FloatToString(roll))");
+            WheelDriveTest_Event(s"flight: up \(FloatToString(position.Z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), rise \(FloatToString(velocity.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed())), lift \(FloatToString(lift)), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), pitch \(FloatToString(pitch)), roll \(FloatToString(roll))");
         }
     }
 
