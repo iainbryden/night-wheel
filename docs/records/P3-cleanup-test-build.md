@@ -51,10 +51,12 @@ Approved by the user; files replaced and hash-checked, multiplier file set to 4.
 - **Dead spot correction:** no separate report on feel just off centre.
 - **Stability:** no crash per the user, no new crash report, and the wheel stayed connected.
 
+- **Shutdown:** read after the user closed the game. The session ended and the plugin unloaded about 8.7 minutes in, and no new crash report was written. Of the saves, only `user.gls` changed.
+- **Dead spot fit:** the stick-to-action table now reads about 0.00 at stick 0.34, and within about 0.05 of intent from 0.44 to 0.88 in most ranges. Stick 0.49 on the right read 0.284 against an intended 0.25. Each range holds only its latest value.
+
 Not confirmed:
 
-- Whether the game's own pause menu entries still work. Resume happened twice in the log, but by what route is unknown.
-- Shutdown with this build.
+- Whether the game's own pause menu entries still work. Resume happened in the log, but by what route is unknown, and the user has not reported on Load Game or Settings.
 - Steering speed below x4.
 - Tire speed is the user's judgement. Tire angle is not measured.
 
