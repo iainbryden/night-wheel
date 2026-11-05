@@ -35,6 +35,21 @@ Add TweakXL 1.12.0 for this test only. During pause, comma and period choose lev
 
 The log shows stock values matching the earlier report, `written=true updated=true` for each level. The user compares levels for catch-up speed and stability.
 
+## Result, 2026-11-04
+
+Approved by the user; TweakXL added and the script replaced, all hash-checked. Two launches. No crash.
+
+- Stock values were found in both launches, on different drive models: 1.0, 0.1, 95, 128 and 1.0, 0.15, 100, 130.
+- Levels 1, 2 and 3 logged `written=true updated=true`.
+- User report: the car still takes too long to catch up.
+- `AutoSave-5` changed in the saves folder, as well as `user.gls`. The user has said they do not need recent autosaves.
+
+**This does not rule these values out.** The test has three gaps:
+
+1. Nothing read the values back after writing, so the write taking effect is unproven.
+2. A vehicle already in the world may keep values it read when it spawned. The test re-entered the same car, and never tried a newly spawned one.
+3. Nothing measured the tire angle, so the result rests on feel alone.
+
 ## Reversal
 
 Removing TweakXL and the script lines ends it. Stock values return on the next launch regardless.
