@@ -85,6 +85,26 @@ Plugin 0.5.0 `wd_game.dll` SHA-256 is recorded in `evidence/TEST_RESULTS.csv`. T
 
 The two constants are measured on one run and one vehicle, and depend on the game's settings. They need rechecking after patches.
 
+## Compensation run, 2026-11-04
+
+Approved by the user; plugin replaced and hash-checked. 93 seconds driving, no crash, no wheel dropout, polling unchanged at a median of 62 per second. Only `user.gls` changed in the saves folder.
+
+| Stick position (range centre) | `TurnX`, left | `TurnX`, right | Intended by the constants |
+|---|---|---|---|
+| 0.44 | 0.124 | 0.147 | 0.08 |
+| 0.54 | 0.342 | 0.371 | 0.26 |
+| 0.63 | 0.537 | 0.499 | 0.43 |
+| 0.73 | 0.706 | 0.738 | 0.62 |
+| 0.83 | 0.908 | 0.913 | 0.81 |
+| 0.88 | 0.924 | 0.963 | 0.91 |
+| 0.93 | 1.000 | 1.000 | 1.00 |
+
+The game's action now reaches usable values across the wheel's range, but runs roughly 0.05 to 0.1 above intent. A fit to this finer table suggests a dead range ending near 0.37 and full at about 0.875, rather than 0.40 and 0.93. Each row is a latest value within a range about 0.05 wide, taken from the fit by eye, so this needs one more check.
+
+`action_delay` was commonly at most 8 ms and nearly always at most 16 ms. Its worst was 1.96 s. That has not been explained; the steering action may not report during a pause or menu, which would count that whole gap. It needs separating from driving time before it is relied on.
+
+The user's report on feel: pending.
+
 ## Next step
 
-Get approval to replace the plugin, then test how steering feels and read the new table. If steering still lags, consider adjusting the rate settings in game data as a separate decision.
+Get the user's report on feel. Then refine the constants, and decide whether the rate settings need changing.
