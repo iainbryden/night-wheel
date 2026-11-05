@@ -155,10 +155,12 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_flightLogged: Float;
     private let m_flightLastYaw: Float;
     private let m_flightYawRate: Float;
-    private let m_flightLastPitch: Float;
-    private let m_flightLastRoll: Float;
-    private let m_landingStill: Float;
-    private let m_flightLoggedCentre: Bool;
+    private let m_flightX: Float;
+    private let m_flightY: Float;
+    private let m_flightZ: Float;
+    private let m_flightVX: Float;
+    private let m_flightVY: Float;
+    private let m_flightVZ: Float;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -379,154 +381,144 @@ public class WheelDriveTestService extends ScriptableService {
         vehicle.QueueEvent(event);
     }
 
-    // Flight mode holds the car up with physics pushes. The wheel sets a turn rate, which is measured
-    // and corrected each frame so centring the wheel stops the turn. Pairs of pushes keep the car
-    // level. The pedals give thrust and braking, and momentum is kept. Switching off brings the car
-    // down at a limited speed. Every strength is a provisional test value. It changes no vehicle
-    // data and saves nothing.
+    // Flight mode sets the car's position and heading each frame through the game's teleport
+    // function, so gravity and tire physics no longer decide where it goes. The mod simulates
+    // motion: the wheel sets a turn rate, the pedals give thrust and braking, and momentum carries.
+    // A ray down to the ground stops it going below ground and ends a landing. Nothing here checks
+    // for buildings ahead. Every strength is a provisional test value. It changes no vehicle data
+    // and saves nothing.
     private func UpdateFlight(player: ref<PlayerPuppet>, toggled: Bool) {
         let vehicle = GetMountedVehicle(player);
         if !IsDefined(vehicle) {
             return;
         }
-        let position = vehicle.GetWorldPosition();
+        let game = GetGameInstance();
         if toggled {
             if this.m_flying && !this.m_landing {
                 this.m_landing = true;
-                this.m_landingStill = 0.0;
                 WheelDriveTest_Event("flight: landing");
             } else {
+                let begin = vehicle.GetWorldPosition();
+                let moving = vehicle.GetLinearVelocity();
                 this.m_flying = true;
                 this.m_landing = false;
-                this.m_flightStart = position.Z;
-                this.m_flightTarget = position.Z + 15.0;
+                this.m_flightStart = begin.Z;
+                this.m_flightTarget = begin.Z + 15.0;
+                this.m_flightX = begin.X;
+                this.m_flightY = begin.Y;
+                this.m_flightZ = begin.Z;
+                this.m_flightVX = moving.X;
+                this.m_flightVY = moving.Y;
+                this.m_flightVZ = 0.0;
                 this.m_flightLastYaw = vehicle.GetWorldYaw();
                 this.m_flightYawRate = 0.0;
-                let startForward = vehicle.GetWorldForward();
-                let startRight = vehicle.GetWorldRight();
-                this.m_flightLastPitch = startForward.Z;
-                this.m_flightLastRoll = startRight.Z;
-                WheelDriveTest_Event(s"flight: on at height \(FloatToString(position.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
+                WheelDriveTest_Event(s"flight: on at height \(FloatToString(begin.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
             }
         }
-        let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
-        let elapsed = now - this.m_flightLastTime;
+        let now = EngineTime.ToFloat(GameInstance.GetSimTime(game));
+        let elapsed = MinF(now - this.m_flightLastTime, 0.1);
         this.m_flightLastTime = now;
-        if !this.m_flying || elapsed <= 0.0 || elapsed > 0.1 {
+        if !this.m_flying || elapsed <= 0.0 {
             return;
         }
         if this.m_autopilot {
             this.EndFlight("autodrive");
             return;
         }
-        let mass = vehicle.GetTotalMass();
-        let velocity = vehicle.GetLinearVelocity();
+
+        // Turning.
+        this.m_flightYawRate += (-this.m_turn * 60.0 - this.m_flightYawRate) * MinF(elapsed * 6.0, 1.0);
+        let yaw = this.m_flightLastYaw + this.m_flightYawRate * elapsed;
+        this.m_flightLastYaw = yaw;
         let forward = vehicle.GetWorldForward();
         let right = vehicle.GetWorldRight();
+        let flat = SqrtF(forward.X * forward.X + forward.Y * forward.Y);
+        let aheadX = flat > 0.1 ? forward.X / flat : 1.0;
+        let aheadY = flat > 0.1 ? forward.Y / flat : 0.0;
+        let sideX = aheadY;
+        let sideY = -aheadX;
+        if right.X * sideX + right.Y * sideY < 0.0 {
+            sideX = -sideX;
+            sideY = -sideY;
+        }
+
+        // Motion along the heading and across it. Sideways motion fades, so the car goes where it
+        // points, and a little drag slows it when coasting.
+        let along = this.m_flightVX * aheadX + this.m_flightVY * aheadY;
+        let across = this.m_flightVX * sideX + this.m_flightVY * sideY;
+        let boostPercent = Cast<Float>(WheelDriveTest_BoostPercent());
+        let boosting = WheelDriveTest_BoostWanted();
+        let thrust = WheelDriveTest_Throttle() * 15.0;
+        if boosting {
+            thrust += MinF(6.0 + boostPercent * 0.12, 30.0);
+        }
+        along += (thrust - WheelDriveTest_Brake() * 25.0) * elapsed;
+        along -= along * 0.1 * elapsed;
+        let limit = boosting ? 70.0 * (1.0 + boostPercent / 100.0) : 70.0;
+        along = ClampF(along, 0.0, MaxF(limit, along - 30.0 * elapsed));
+        across -= across * MinF(elapsed * 2.0, 1.0);
+        this.m_flightVX = aheadX * along + sideX * across;
+        this.m_flightVY = aheadY * along + sideY * across;
 
         // Height.
         let held = WheelDriveTest_ScriptHeld();
-        let climb = 0.0;
         if (held & 128) != 0 {
-            climb += 12.0;
+            this.m_flightTarget += 15.0 * elapsed;
         }
         if (held & 256) != 0 {
-            climb -= 12.0;
+            this.m_flightTarget -= 15.0 * elapsed;
         }
-        this.m_flightTarget = ClampF(this.m_flightTarget + climb * elapsed, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
-        // The target stays near the car, so letting go of Climb stops the climb soon.
-        this.m_flightTarget = ClampF(this.m_flightTarget, position.Z - 15.0, position.Z + 15.0);
-        let wantedRise = ClampF((this.m_flightTarget - position.Z) * 1.5, -12.0, 12.0);
-        if this.m_landing {
-            wantedRise = -4.0;
-            this.m_landingStill = AbsF(velocity.Z) < 0.5 ? this.m_landingStill + elapsed : 0.0;
-            if this.m_landingStill > 0.5 {
-                this.EndFlight("landed");
-                return;
+        this.m_flightTarget = ClampF(this.m_flightTarget, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
+        this.m_flightTarget = ClampF(this.m_flightTarget, this.m_flightZ - 15.0, this.m_flightZ + 15.0);
+        let wantedRise = this.m_landing ? -8.0 : ClampF((this.m_flightTarget - this.m_flightZ) * 2.0, -15.0, 15.0);
+        this.m_flightVZ += (wantedRise - this.m_flightVZ) * MinF(elapsed * 4.0, 1.0);
+
+        // Move.
+        let x = this.m_flightX + this.m_flightVX * elapsed;
+        let y = this.m_flightY + this.m_flightVY * elapsed;
+        let z = this.m_flightZ + this.m_flightVZ * elapsed;
+
+        // The ground below.
+        let trace: TraceResult;
+        let from = new Vector4(x, y, z + 1.0, 1.0);
+        let to = new Vector4(x, y, z - 200.0, 1.0);
+        let hit = GameInstance.GetSpatialQueriesSystem(game).SyncRaycastByCollisionGroup(from, to, n"Static", trace, true, false);
+        let groundKnown = hit && TraceResult.IsValid(trace);
+        let clearance = 999.0;
+        if groundKnown {
+            let point = trace.position;
+            clearance = z - point.Z;
+            if clearance < 0.8 {
+                z = point.Z + 0.8;
+                this.m_flightTarget = MaxF(this.m_flightTarget, z);
+                if this.m_flightVZ < 0.0 {
+                    this.m_flightVZ = 0.0;
+                }
             }
         }
-        // Below zero pushes down, because the car was seen to keep rising with no lift at all.
-        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, -15.0, 20.0);
-
-        // Turn rate, in degrees a second, with a positive wheel turning the heading negative.
-        let yaw = vehicle.GetWorldYaw();
-        let yawStep = yaw - this.m_flightLastYaw;
-        while yawStep > 180.0 {
-            yawStep -= 360.0;
+        // With no ground found, a landing ends at the height where flight began.
+        if this.m_landing && (clearance < 1.2 || (!groundKnown && z <= this.m_flightStart)) {
+            this.EndFlight("landed");
+            return;
         }
-        while yawStep < -180.0 {
-            yawStep += 360.0;
-        }
-        this.m_flightLastYaw = yaw;
-        this.m_flightYawRate = this.m_flightYawRate * 0.5 + (yawStep / elapsed) * 0.5;
-        let yawError = -this.m_turn * 60.0 - this.m_flightYawRate;
-        let turnPush = ClampF(-Deg2Rad(yawError) * 6.0, -15.0, 15.0);
+        this.m_flightX = x;
+        this.m_flightY = y;
+        this.m_flightZ = z;
 
-        // Level, from how far the nose and right side are above level and how fast they move.
-        let pitch = forward.Z;
-        let roll = right.Z;
-        let pitchPush = ClampF(-(pitch * 12.0 + (pitch - this.m_flightLastPitch) / elapsed * 3.0), -20.0, 20.0);
-        let rollPush = ClampF(-(roll * 12.0 + (roll - this.m_flightLastRoll) / elapsed * 3.0), -20.0, 20.0);
-        this.m_flightLastPitch = pitch;
-        this.m_flightLastRoll = roll;
+        let facing: EulerAngles;
+        facing.Pitch = 0.0;
+        facing.Roll = 0.0;
+        facing.Yaw = yaw;
+        GameInstance.GetTeleportationFacility(game).Teleport(vehicle, new Vector4(x, y, z, 1.0), facing);
 
-        // Thrust along the heading, and braking against the direction of travel. Slide is eased
-        // towards the heading only gently, so momentum carries.
-        let flat = SqrtF(forward.X * forward.X + forward.Y * forward.Y);
-        let aheadX = flat > 0.1 ? forward.X / flat : 0.0;
-        let aheadY = flat > 0.1 ? forward.Y / flat : 0.0;
-        let along = velocity.X * aheadX + velocity.Y * aheadY;
-        let thrust = along < 70.0 ? WheelDriveTest_Throttle() * 12.0 : 0.0;
-        // Boost adds level thrust here, so it can't carry the car upward as it did when it pushed
-        // along the nose.
-        let boostPercent = Cast<Float>(WheelDriveTest_BoostPercent());
-        if WheelDriveTest_BoostWanted() && along < 70.0 * (1.0 + boostPercent / 100.0) {
-            thrust += MinF(6.0 + boostPercent * 0.12, 30.0);
-        }
-        let travel = SqrtF(velocity.X * velocity.X + velocity.Y * velocity.Y);
-        let braking = travel > 0.5 ? WheelDriveTest_Brake() * 10.0 / travel : 0.0;
-        let slide = velocity.X * right.X + velocity.Y * right.Y;
-        let ease = ClampF(slide * 0.8, -6.0, 6.0);
-
-        // Lift and thrust go through the centre of mass, so they don't tip the car. The offset comes
-        // from the drive model, and is along the car's right, forward and up directions as far as
-        // its name shows. The log records it.
-        let centre = position;
-        let model = vehicle.GetRecord().VehDriveModelDataHandle();
-        if IsDefined(model) {
-            let offset = model.Center_of_mass_offset();
-            centre = new Vector4(
-                position.X + right.X * offset.X + forward.X * offset.Y,
-                position.Y + right.Y * offset.X + forward.Y * offset.Y,
-                position.Z + right.Z * offset.X + forward.Z * offset.Y + offset.Z,
-                1.0);
-            if !this.m_flightLoggedCentre {
-                this.m_flightLoggedCentre = true;
-                WheelDriveTest_Event(s"flight: centre of mass offset \(FloatToString(offset.X)), \(FloatToString(offset.Y)), \(FloatToString(offset.Z)), mass \(FloatToString(mass))");
-            }
-        }
-        let step = mass * elapsed;
-        this.Push(vehicle, centre,
-            (aheadX * thrust - velocity.X * braking - right.X * ease) * step,
-            (aheadY * thrust - velocity.Y * braking - right.Y * ease) * step,
-            lift * step);
-
-        // Opposed pairs turn and level the car without moving it.
-        let pitchStep = pitchPush * step;
-        let turnStep = turnPush * step;
-        let nose = new Vector4(centre.X + forward.X * 2.0, centre.Y + forward.Y * 2.0, centre.Z + forward.Z * 2.0, 1.0);
-        let tail = new Vector4(centre.X - forward.X * 2.0, centre.Y - forward.Y * 2.0, centre.Z - forward.Z * 2.0, 1.0);
-        this.Push(vehicle, nose, right.X * turnStep, right.Y * turnStep, pitchStep);
-        this.Push(vehicle, tail, -right.X * turnStep, -right.Y * turnStep, -pitchStep);
-        let rollStep = rollPush * step;
-        let rightSide = new Vector4(centre.X + right.X, centre.Y + right.Y, centre.Z + right.Z, 1.0);
-        let leftSide = new Vector4(centre.X - right.X, centre.Y - right.Y, centre.Z - right.Z, 1.0);
-        this.Push(vehicle, rightSide, 0.0, 0.0, rollStep);
-        this.Push(vehicle, leftSide, 0.0, 0.0, -rollStep);
+        // Cancels the gravity that would otherwise build up between frames.
+        let actual = vehicle.GetWorldPosition();
+        this.Push(vehicle, actual, 0.0, 0.0, vehicle.GetTotalMass() * 9.81 * elapsed);
 
         if now - this.m_flightLogged >= 1.0 {
             this.m_flightLogged = now;
-            WheelDriveTest_Event(s"flight: up \(FloatToString(position.Z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), rise \(FloatToString(velocity.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed())), lift \(FloatToString(lift)), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), pitch \(FloatToString(pitch)), roll \(FloatToString(roll))");
+            let physics = vehicle.GetLinearVelocity();
+            WheelDriveTest_Event(s"flight: up \(FloatToString(z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), clearance \(FloatToString(clearance)), rise \(FloatToString(this.m_flightVZ)), along \(FloatToString(along)), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), actual z error \(FloatToString(actual.Z - z)), physics rise \(FloatToString(physics.Z))");
         }
     }
 

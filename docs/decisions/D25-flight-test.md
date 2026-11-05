@@ -70,6 +70,21 @@ Approved by the user; files replaced and hash-checked. User report: gravity brin
 
 `GetTeleportationFacility().Teleport` compiles on a vehicle. Setting the car's position each frame would avoid gravity and physics entirely. It may stutter, may not collide with buildings, and may upset the game's vehicle state. No script function to set velocity or switch off gravity was found among the names tried.
 
+## Fourth build: position control
+
+Chosen by the user. Plugin 0.20.0. `wd_game.dll` SHA-256 `8a3646d5ed0a8f874a1f155188f5e9ec4ff2e9b06c047bb7d8b4f7826ef257f6`; `WheelDriveLoadTest.reds` SHA-256 `6029056eb66f3a153718043a8a6e5df815420b968b7d7792aa1c500c01582905`. Staged in `out/flight4-test/`. Not run in the game.
+
+- The car's position and heading are set each frame with `GetTeleportationFacility().Teleport`, and the mod simulates motion.
+- It starts with the car's current horizontal velocity and rises to 15 metres. The wheel sets up to 60 degrees a second. Throttle gives up to 15 m/s², the brake up to 25, boost adds thrust, and sideways motion fades.
+- Climb and Descend are 15 metres a second, within 400 metres of the start height.
+- A downward ray in the `Static` collision group keeps the car above ground and ends a landing near it. If no ground is found, a landing ends at the start height.
+- One upward push each frame cancels gravity, to limit fall speed building between frames.
+- The log records clearance, simulated and actual height, and physics vertical speed.
+
+Assumptions to check: `EulerAngles.Yaw` matches `GetWorldYaw`, the ray's arguments and group are right, and teleporting each frame doesn't upset the vehicle. There is no check for buildings ahead, and the car level with no banking. Its speed isn't carried over when flight ends.
+
+Checks: 146 of 146 tests passed and lints were clean before a final script-only change, and the final script compiled against a copy of the game's `final.redscripts`.
+
 ## Unknowns
 
 - Whether the car's inertia suits these values. The first version may wobble or feel wrong.
