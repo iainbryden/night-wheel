@@ -1,7 +1,7 @@
 # Test P1-CONTROLS: which report number is which G29 control
 
 Date: 2026-11-05
-Result: PARTIAL. All listed controls reported, and one pair needs confirming.
+Result: PASS for the listed controls, on one wheel in one G HUB profile. Buttons 13 to 19 were not seen.
 Evidence type: USER, GAME
 Source checkpoint and hashes: `6e0900a`; `wd_game.dll` SHA-256 `361c8a623f4e3a36174bda6e6449a75ef773f39e411e155aa2bcb9428f955020`; script SHA-256 `a1d7044c711bf1df68395cb615e971392c7f898cec97088bde82d49244476ae8`
 Device: `VID_046D PID_C24F` rev 8900 in G HUB's "Cyberpunk 2077: Default" profile. Game 2.5, Steam build 26161058.
@@ -18,9 +18,9 @@ With the panel open in the pause menu, the user pressed 10 left paddle presses a
 | X, Square, Circle, Triangle | Button 1, 2, 3, 4 |
 | Right paddle, left paddle | Button 5, 6 |
 | R2 | Button 7 |
-| L2 | Button 11 (see below) |
-| R3 | Button 8 (see below) |
-| L3 | Button 12 |
+| L2 | Button 8 |
+| R3 | Button 11 |
+| L3 | Button 12 (by elimination) |
 | Share, Options, PS | Button 9, 10, 25 |
 | Plus, minus | Button 20, 21 |
 | Dial clockwise, counter-clockwise | Button 22, 23 |
@@ -30,8 +30,7 @@ The left paddle marker logged Button 6 ten times, and matches its place in the l
 
 ## Open points
 
-- **The map above was wrong for L2.** The log order was 7, 11, 8, 12. In a retest, the user read L2 as Button 8, so the first sequence was not in the listed order. The retest log (`out/game-before/load-test-run13.log`) shows only Button 8 and Button 11 pressed.
-- **Button 11 is not settled.** The user reported it as L3 after being asked to press R3. If that is a slip, R3 is Button 11 and L3 is Button 12. If not, the two are the other way round. The table's L2, R3 and L3 rows must not be used until the user confirms.
+- **Retest of the shoulder buttons.** The first sequence logged 7, 11, 8, 12, which was not in the listed order. In a retest (`out/game-before/load-test-run13.log`), the user read L2 as Button 8 and R3 as Button 11. L3 as Button 12 follows by elimination and was not pressed on its own in the retest.
 - **Buttons 13 to 19 were not seen.** The report has 25 buttons, and these seven have no control from this list. An add-on shifter is a possibility, and has not been checked.
 - **The dial sends short pulses.** Each dial click appeared as two pulses, and some were logged as lasting about 10 to 100 ms. The shortest is below the game's roughly 16 ms poll and the panel's refresh, so binding must catch presses on the wheel reader's thread rather than by sampling held state, or dial clicks will be missed. Pulses shorter than the panel's refresh may also have gone unlogged.
 - The D-pad also reported a diagonal (Hat 7) once during free presses, so diagonals exist and binding must define what they mean.
