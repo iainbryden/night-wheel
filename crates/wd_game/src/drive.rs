@@ -15,9 +15,22 @@ pub struct Output {
 }
 
 /// Where the game's steering action leaves zero and reaches full, as a fraction of stick travel.
-/// Measured from the game's `TurnX` action on patch 2.5; see docs/records/P3-steering-report-build.md.
-const STICK_DEAD_END: f64 = 0.40;
-const STICK_FULL: f64 = 0.93;
+/// Fitted to the game's `TurnX` action on patch 2.5; see docs/records/P3-cleanup-test-build.md.
+const STICK_DEAD_END: f64 = 0.35;
+const STICK_FULL: f64 = 0.90;
+
+/// The steering speed multiplier when no valid choice exists. The only value proven to keep up.
+pub const DEFAULT_STEERING_SPEED: f32 = 10.0;
+/// No value above the highest one tried, and none below the game's own speed.
+const STEERING_SPEED_RANGE: std::ops::RangeInclusive<f32> = 1.0..=10.0;
+
+/// The multiplier chosen in a settings file's text, if it holds one valid number.
+pub fn parse_steering_speed(text: &str) -> Option<f32> {
+    text.trim()
+        .parse::<f32>()
+        .ok()
+        .filter(|value| STEERING_SPEED_RANGE.contains(value))
+}
 
 /// Undoes the game's vehicle deadzone, so wheel position maps straight to the game's action.
 /// Zero stays exactly zero. Any other intent starts at the edge of the dead range.
@@ -118,6 +131,21 @@ mod tests {
             throttle: pedal,
             brake: pedal,
             bindings: Bindings::default(),
+        }
+    }
+
+    #[test]
+    fn a_valid_steering_speed_is_read_with_surrounding_space() {
+        assert_eq!(parse_steering_speed(" 4
+"), Some(4.0));
+        assert_eq!(parse_steering_speed("1"), Some(1.0));
+        assert_eq!(parse_steering_speed("10.0"), Some(10.0));
+    }
+
+    #[test]
+    fn an_invalid_steering_speed_is_refused() {
+        for text in ["", "fast", "0.5", "10.5", "-3", "NaN", "inf", "4 5"] {
+            assert_eq!(parse_steering_speed(text), None, "{text:?}");
         }
     }
 

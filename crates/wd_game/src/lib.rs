@@ -31,7 +31,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 7, 0);
+    const VERSION: SemVer = SemVer::new(0, 8, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -41,15 +41,16 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_Key", key)),
             GlobalExport(global!(c"WheelDriveTest_SetDriving", set_driving)),
             GlobalExport(global!(c"WheelDriveTest_SteeringAction", steering_action)),
-            GlobalExport(global!(c"WheelDriveTest_Sample", sample)),
+            GlobalExport(global!(c"WheelDriveTest_SteeringSpeed", steering_speed)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.7.0".to_owned());
+        log_file::send("plugin loaded, version 0.8.0".to_owned());
         load_profile();
+        load_steering_speed();
         xinput_hook::attach(env);
         let map = shared::PROFILE.get().map(|profile| profile.axes);
         let reader = wheel::WheelReader::start(map);
@@ -96,18 +97,32 @@ fn load_profile() {
     }
 }
 
+/// Read before the game asks for it. A missing or unusable file keeps the proven default.
+fn load_steering_speed() {
+    let path = std::env::var_os("LOCALAPPDATA")
+        .map(|base| PathBuf::from(base).join("WheelDrive").join("steering-speed.txt"));
+    let text = path.and_then(|path| std::fs::read_to_string(path).ok());
+    let chosen = text.as_deref().and_then(drive::parse_steering_speed);
+    let value = chosen.unwrap_or(drive::DEFAULT_STEERING_SPEED);
+    shared::set_steering_speed(value);
+    let source = match (&text, chosen) {
+        (_, Some(_)) => "from file",
+        (Some(_), None) => "file not usable, so the default",
+        (None, None) => "no file, so the default",
+    };
+    log_file::send(format!("steering speed x{value}, {source}"));
+}
+
+fn steering_speed() -> f32 {
+    shared::steering_speed()
+}
+
 fn set_driving(driving: bool) {
     shared::set_driving(driving);
 }
 
 fn steering_action(value: f32) {
     shared::record_steering_action(value);
-}
-
-fn sample(turn: f32, yaw: f32, speed: f32) {
-    if let Some(line) = shared::response_sample(turn, yaw, speed) {
-        log_file::send(line);
-    }
 }
 
 fn ping(value: i32) -> i32 {
