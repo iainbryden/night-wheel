@@ -94,8 +94,8 @@ The user chose the decisive test. Values are multiplied by 10 for every drive mo
 
 **What it does not show.**
 
-- Tire angle is still not measured, so "faster" is the user's judgement, and how closely the tires now match the wheel is unknown.
+- Tire angle is still not measured. "Faster" and the follow-up report, "Yes, keeps up", are the user's judgement, not a measured match.
 - All four values changed together, so which ones matter is unknown.
-- 10 is a test point, not a chosen setting. Whether it causes twitchiness has not been reported.
+- 10 is the only value tried at game start, so a lower one might do as well. The user did not report twitchiness, but was not asked about it separately from keeping up.
 - Heading rate followed `TurnX` by about 60 ms with a correlation of 0.53. The earlier 170 ms came from a run with only 13% of samples moving, against 93% here, so the two are not a fair before and after.
 - TweakXL remains test-only pending the dependency review. Its use for the product is not decided here.
