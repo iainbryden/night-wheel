@@ -23,6 +23,7 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_keys: Int32;
     private let m_testValue: Int32;
     private let m_text: ref<inkText>;
+    private let m_refresh: ref<inkAnimProxy>;
 
     private cb func OnLoad() {
         WheelDriveTest_Event("script-loaded");
@@ -119,10 +120,39 @@ public class WheelDriveTestService extends ScriptableService {
         text.Reparent(layer.GetVirtualWindow());
         this.m_text = text;
         this.UpdateText();
+        this.StartRefresh();
         WheelDriveTest_Event("text-shown");
     }
 
+    // The delay system mostly stops during pause, so a looping UI animation drives the display.
+    // It leaves the widget fully visible and only supplies the update.
+    private func StartRefresh() {
+        let hold = new inkAnimTransparency();
+        hold.SetStartTransparency(1.0);
+        hold.SetEndTransparency(1.0);
+        hold.SetDuration(0.016);
+
+        let definition = new inkAnimDef();
+        definition.AddInterpolator(hold);
+
+        let options: inkAnimOptions;
+        options.loopType = inkanimLoopType.Cycle;
+        options.loopInfinite = true;
+
+        this.m_refresh = this.m_text.PlayAnimationWithOptions(definition, options);
+        this.m_refresh.RegisterToCallback(inkanimEventType.OnEndLoop, this, n"OnRefresh");
+    }
+
+    private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
+        this.m_steering = WheelDriveTest_Read();
+        this.UpdateText();
+    }
+
     private func HideText() {
+        if IsDefined(this.m_refresh) {
+            this.m_refresh.Stop();
+            this.m_refresh = null;
+        }
         if IsDefined(this.m_text) {
             this.m_text.SetVisible(false);
             this.m_text = null;

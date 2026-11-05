@@ -61,7 +61,9 @@ Approved by the user; both files replaced and hash-checked. Resolve, CurseForge 
 1. The per-frame delay callback largely stops during pause, so nothing refreshed the text. Key presses refreshed it, but with no new value read.
 2. **The wheel left the system 16 seconds before the pause.** The log has `controller disconnected` at 19:50:55, with the last report at about 19:50:39 and none afterward. The first test read 13,790 reports during pause, so this was not caused by pausing.
 
-After the run, Windows no longer listed the wheel as `VID_046D PID_C24F`. It listed the same USB port as `VID_046D PID_C260`, "G29 Driving Force Racing Wheel (PS4)" on the `LGHUBWinUSB` driver, and `wd_diag --list` found no game controllers. The G HUB main process was not running, only its updater. The cause of the switch is not established. The plugin has no device-write path, but that alone does not rule out an indirect effect.
+After the run, Windows no longer listed the wheel as `VID_046D PID_C24F`. It listed the same USB port as `VID_046D PID_C260`, "G29 Driving Force Racing Wheel (PS4)" on the `LGHUBWinUSB` driver, and `wd_diag --list` found no game controllers. The Windows Plug and Play log shows the wheel starting as `PID_C260` at 19:50:56.
+
+Follow-up the same evening: the user said G HUB had not been opened for any of these tests. When they opened it at about 19:56, the wheel returned to `PID_C24F`, and `wd_diag --list` read it again. So G HUB can move the wheel into the readable mode, and the wheel can leave that mode with G HUB closed. Why it re-appeared at 19:50:55 is not established. The plugin has no device-write path, but that alone does not rule out an indirect effect. The user reported the wheel's power was on; a PS3/PS4 mode switch on the wheel was only a guess and was not confirmed to exist.
 
 ### Timing in play, before the disconnect
 
@@ -77,8 +79,13 @@ Reports only arrive when something changes, so slow movement inflates value age.
 ### Findings for the product
 
 - Wheel mode can change while the game runs, leaving a device this code cannot read. The mod must detect it and say so, and must release any held inputs.
+- As observed, reading the wheel may depend on G HUB having set its mode. Setup instructions and the mod's messages must cover this. Switching mode from this project would require writing to the device, which needs research and specific approval.
 - A live in-game calibration screen needs a pause-safe update, not the delay system.
+
+## Script update for the retest
+
+The text is now refreshed by a looping UI animation, using the animation calls Codeware's own buttons use. The looping options were checked only by compiling against the game's scripts. `WheelDriveLoadTest.reds` SHA-256 `bef8054536a9a97aa6547dcd899c634472e529b5aea3248cd4a7cd803bd3df13`. `wd_game.dll` is unchanged. Compiled offline with no warnings from this script; not yet run.
 
 ## Next step
 
-Restore the wheel to `PID_C24F`, find what caused the switch, and retest the live display with a pause-safe update.
+Get approval to replace the script, then retest with G HUB open and watch for another mode change.
