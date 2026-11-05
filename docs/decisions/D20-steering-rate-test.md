@@ -1,7 +1,7 @@
 # Decision D20: test the game's steering speed values with TweakXL
 
-Status: proposed for a test only, awaiting the user. Nothing has been tested in the game.
-Date: 2026-11-04
+Status: test passed by user report on 2026-11-05, applying the values at game start. No setting chosen, and not yet accepted for the product.
+Date: 2026-11-04, updated 2026-11-05
 
 ## Problem
 
@@ -79,3 +79,23 @@ Approved by the user; files replaced and hash-checked. The game was still runnin
 ## Decision needed
 
 Steering speed through data changes has now failed to help in two runs. One untested case remains: a car spawned after the values change. Do that one decisive test, or stop.
+
+## Start-up run, 2026-11-05
+
+The user chose the decisive test. Values are multiplied by 10 for every drive model in `ScriptableTweak.OnApply`, before any car exists. Plugin 0.7.0; hashes are in `evidence/TEST_RESULTS.csv`.
+
+- **User report:** "Yes, faster". This is the first change in this series that the user could see.
+- **Applied:** the log shows 108 drive models and 432 values changed, so the record type name is correct and all four values exist on every model.
+- **Read-back:** car `9020198` read 10, 1, 950, 1280 and was parked for about 10 s. Car `9020199` read 10, 1.5, 1000, 1300 and was driven for about 20 minutes.
+- **Stability of the run:** the wheel stayed connected, the plugin unloaded on quit, and no new crash report was written.
+- **Saves:** `AutoSave-8` to `AutoSave-14` and `user.gls` were written by the game during the run. The user has said they do not need recent autosaves. Nothing was deleted.
+
+**What this shows.** The values do affect the tires when applied before the car exists, and changing them on a car already in the world did not visibly help. The likely reading is that a car takes these values when it is created, but this rests on one report and the two earlier runs, not on a direct measurement.
+
+**What it does not show.**
+
+- Tire angle is still not measured, so "faster" is the user's judgement, and how closely the tires now match the wheel is unknown.
+- All four values changed together, so which ones matter is unknown.
+- 10 is a test point, not a chosen setting. Whether it causes twitchiness has not been reported.
+- Heading rate followed `TurnX` by about 60 ms with a correlation of 0.53. The earlier 170 ms came from a run with only 13% of samples moving, against 93% here, so the two are not a fair before and after.
+- TweakXL remains test-only pending the dependency review. Its use for the product is not decided here.
