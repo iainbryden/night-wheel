@@ -27,13 +27,15 @@ Actual:
 
 Defect found and fixed: the indicator dots on Assignments rendered as empty boxes because the font lacks those characters. They were replaced by a "Held" label, and the screen was recaptured. The unit tests could not have caught this.
 
+User check, same build: the user reported that the parts of the app that read the wheel work fine. A screenshot from the user showed the G29 detected on the Device screen. The report did not list individual controls, and did not cover calibration, Listen, Save or reconnect.
+
 Evidence files: this record. Screen captures were reviewed in the session and not kept, to keep the repository free of binaries.
 
 Limitations:
 
 - **No clicks were exercised.** Simulated window messages did not operate the app, so buttons, sliders, the wizard run, Listen and Save have not been used in the real app. Their rules are covered by unit tests in `wd_core`; the screen code connecting them is not.
 - "Not available yet" was captured but not reviewed in detail.
-- No wheel readings, button presses or disconnects have appeared in this app yet.
+- Wheel reading rests on the user's report above. Disconnects have not been reported in this app.
 - A pedal held before axis detection starts counts as movement when it is released. This is a known limit of detecting axes by movement.
 - `MIN_AXIS_MOVEMENT` (10% of range) is provisional until measured on the wheel.
 - The `save` path was unit-tested but not used from the app.

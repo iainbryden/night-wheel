@@ -35,9 +35,9 @@ P1 needs input only, with no motor output.
 | Route | Facts so far | Open |
 |---|---|---|
 | RED4ext loader | MIT; latest release v1.31.0 on 2026-10-24; its notes set patch 2.5 as the minimum game version | Behaviour on the user's installed build |
-| red4ext-rs | MIT; latest commit found bumps it to 0.11.2 on 2026-10-27; no GitHub releases | Whether it supports RED4ext v1.31.0 and patch 2.5 |
-| REDmod | Official tools, with their own EULA | Whether it can host native input code at all |
-| Other routes | Not yet compared | Script-only and overlay frameworks need comparing for settings during pause |
+| red4ext-rs | MIT; latest commit found bumps it to 0.11.2 on 2026-10-27; no GitHub releases; needs Rust 1.95+, CMake 3.21+ and libclang | Its README states no loader or game version; here, CMake is 3.20 and libclang was not found. Only an in-game test can show it works |
+| REDmod | Official tools, with their own EULA. Documentation (dated 2022) covers scripts, tweaks, archives, sound and animation, and does not mention native code or input devices | Not suitable alone for wheel input |
+| Other routes | Compared in [D18](../decisions/D18-game-route.md) | Pause behaviour needs an in-game test |
 
 ## Language
 
@@ -45,9 +45,9 @@ See [D16](../decisions/D16-language.md).
 
 ## Settings UI during pause
 
-Not researched yet. It must be compared before P5 and must not rely on a shared settings mod.
+Compared in [D18](../decisions/D18-game-route.md), which is proposed and untested. No document read says whether drawing or input works during pause for any option. It must not rely on a shared settings mod.
 
-The cleanup session reports that the official 2.5 notes add in-game mod browsing, so a MODS menu entry may be part of the base game. The RED4ext v1.31.0 notes also refer to an "in-game mod menu". Read CD Projekt Red's patch notes directly to see whether this gives an official route for an included settings screen. Browsing mods is not the same as hosting settings, so this is unproven.
+CD Projekt Red's 2.5 notes confirm in-game mod browsing and installing through mod.io, and the modding page describes a Mods menu with an enable checkbox. Neither mentions per-mod settings, so no official route for an included settings screen has been found. The RED4ext v1.31.0 notes say it supports that menu together with redscript mods, and give no further detail.
 
 ## Next research
 
