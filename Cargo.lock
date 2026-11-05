@@ -2127,7 +2127,9 @@ name = "wd_game"
 version = "0.1.0"
 dependencies = [
  "red4ext-rs",
+ "wd_core",
  "wd_device",
+ "windows",
 ]
 
 [[package]]

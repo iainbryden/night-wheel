@@ -1,10 +1,12 @@
 //! State shared between the wheel reader, the game's thread and the logger. Everything on
 //! the wheel-to-game path is a plain atomic: no locks and no allocation.
 
+use crate::drive;
 use crate::latency::{Histogram, Summary};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
+use wd_core::config::Config;
 
 /// A read this soon after a report counts as "wheel moving" for value age.
 const MOVING_WINDOW_US: u64 = 50_000;
@@ -14,7 +16,16 @@ const NEVER: u64 = u64::MAX;
 static START: OnceLock<Instant> = OnceLock::new();
 
 pub static PAUSED: AtomicBool = AtomicBool::new(false);
-pub static STEERING: AtomicI32 = AtomicI32::new(0);
+pub static WHEEL_CONNECTED: AtomicBool = AtomicBool::new(false);
+/// Validated settings, when a usable file exists. Without them the wheel never drives.
+pub static PROFILE: OnceLock<Config> = OnceLock::new();
+static DRIVING: AtomicBool = AtomicBool::new(false);
+static HEARTBEAT_US: AtomicU64 = AtomicU64::new(0);
+/// Marks an axis with no reading since the wheel last connected.
+const NO_READING: i32 = i32::MIN;
+static AXES: [AtomicI32; 3] = [const { AtomicI32::new(NO_READING) }; 3];
+static LAST_POLL_US: AtomicU64 = AtomicU64::new(NEVER);
+static APPLIED: AtomicU32 = AtomicU32::new(0);
 static LAST_REPORT_US: AtomicU64 = AtomicU64::new(NEVER);
 static LAST_READ_US: AtomicU64 = AtomicU64::new(NEVER);
 static REPORTS: AtomicU32 = AtomicU32::new(0);
@@ -24,6 +35,8 @@ static TOTAL_KEYS: AtomicU32 = AtomicU32::new(0);
 static DECODE: Histogram = Histogram::new();
 static READ_INTERVAL: Histogram = Histogram::new();
 static VALUE_AGE: Histogram = Histogram::new();
+static POLL_INTERVAL: Histogram = Histogram::new();
+static POLL_AGE: Histogram = Histogram::new();
 
 fn micros_since_start(instant: Instant) -> u64 {
     let start = *START.get_or_init(Instant::now);
@@ -31,10 +44,12 @@ fn micros_since_start(instant: Instant) -> u64 {
 }
 
 /// Called by the wheel reader for each wheel report.
-pub fn record_report(steering: Option<i64>, received: Instant) {
+pub fn record_report(axes: [Option<i64>; 3], received: Instant) {
     let now = Instant::now();
-    if let Some(value) = steering {
-        STEERING.store(value as i32, Ordering::Relaxed);
+    for (slot, value) in AXES.iter().zip(axes) {
+        if let Some(value) = value {
+            slot.store(value as i32, Ordering::Relaxed);
+        }
     }
     LAST_REPORT_US.store(micros_since_start(now), Ordering::Relaxed);
     REPORTS.fetch_add(1, Ordering::Relaxed);
@@ -55,7 +70,60 @@ pub fn read_steering() -> i32 {
             VALUE_AGE.record(age);
         }
     }
-    STEERING.load(Ordering::Relaxed)
+    raw_axes()[0].unwrap_or(0)
+}
+
+/// Called on the game's thread each frame, with whether the player is driving.
+pub fn set_driving(driving: bool) {
+    DRIVING.store(driving, Ordering::Relaxed);
+    HEARTBEAT_US.store(micros_since_start(Instant::now()), Ordering::Relaxed);
+}
+
+/// The latest raw steering, throttle and brake readings, where there are any.
+pub fn raw_axes() -> [Option<i32>; 3] {
+    [0, 1, 2].map(|axis| {
+        let raw = AXES[axis].load(Ordering::Relaxed);
+        (raw != NO_READING).then_some(raw)
+    })
+}
+
+/// Forgets old readings when the wheel leaves, so they can't apply after it returns.
+pub fn clear_axes() {
+    for axis in &AXES {
+        axis.store(NO_READING, Ordering::Relaxed);
+    }
+}
+
+/// Whether the wheel may control the game at this moment.
+pub fn wheel_may_apply() -> bool {
+    let now = micros_since_start(Instant::now());
+    drive::may_apply(
+        WHEEL_CONNECTED.load(Ordering::Relaxed),
+        DRIVING.load(Ordering::Relaxed),
+        PAUSED.load(Ordering::Relaxed),
+        now.saturating_sub(HEARTBEAT_US.load(Ordering::Relaxed)),
+    )
+}
+
+/// Called each time the game polls for gamepad state.
+pub fn record_poll() {
+    let now = micros_since_start(Instant::now());
+    let previous = LAST_POLL_US.swap(now, Ordering::Relaxed);
+    if previous != NEVER {
+        POLL_INTERVAL.record(now.saturating_sub(previous));
+    }
+    let reported = LAST_REPORT_US.load(Ordering::Relaxed);
+    if reported != NEVER {
+        let age = now.saturating_sub(reported);
+        if age <= MOVING_WINDOW_US {
+            POLL_AGE.record(age);
+        }
+    }
+}
+
+/// Called when wheel values were given to the game.
+pub fn record_applied() {
+    APPLIED.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Called on the game's thread for each key press. Returns the total so far.
@@ -78,15 +146,22 @@ pub fn stats_line() -> Option<String> {
     let decode = DECODE.drain();
     let interval = READ_INTERVAL.drain();
     let age = VALUE_AGE.drain();
-    if reports == 0 && keys == 0 && interval.count == 0 {
+    let poll = POLL_INTERVAL.drain();
+    let poll_age = POLL_AGE.drain();
+    let applied = APPLIED.swap(0, Ordering::Relaxed);
+    if reports == 0 && keys == 0 && interval.count == 0 && poll.count == 0 {
         return None;
     }
     Some(format!(
-        "stats paused={} reports={reports} keys={keys} {} {} {}",
+        "stats paused={} driving={} connected={} reports={reports} keys={keys} applied={applied} {} {} {} {} {}",
         PAUSED.load(Ordering::Relaxed),
+        DRIVING.load(Ordering::Relaxed),
+        WHEEL_CONNECTED.load(Ordering::Relaxed),
         format_summary("decode", decode),
         format_summary("read_interval", interval),
         format_summary("value_age", age),
+        format_summary("poll_interval", poll),
+        format_summary("poll_age", poll_age),
     ))
 }
 

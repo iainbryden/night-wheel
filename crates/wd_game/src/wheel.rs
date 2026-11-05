@@ -6,6 +6,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use wd_core::input::AxisId;
+use wd_core::wizard::AxisMap;
+use wd_device::device::Device;
 use wd_device::pump::{Event, Flow, run_values_only};
 
 /// Only used to notice a stop request. Reports do not wait for it.
@@ -13,9 +16,26 @@ const STOP_CHECK_MS: u32 = 250;
 const STOP_WAIT: Duration = Duration::from_millis(1500);
 const STOP_POLL: Duration = Duration::from_millis(20);
 
-const GENERIC_DESKTOP_PAGE: u16 = 0x01;
-/// HID X. Taken as steering for this test; individual controls are still unconfirmed.
-const X_USAGE: u16 = 0x30;
+/// Shown before calibration: HID X, which is not assumed to be steering for driving.
+const DISPLAY_AXIS: AxisId = AxisId {
+    page: 0x01,
+    usage: 0x30,
+};
+
+fn reading(device: &Device, axis: AxisId) -> Option<i64> {
+    device.value(axis.page, axis.usage)
+}
+
+fn readings(device: &Device, map: Option<AxisMap>) -> [Option<i64>; 3] {
+    match map {
+        Some(map) => [
+            reading(device, map.steering),
+            reading(device, map.throttle),
+            reading(device, map.brake),
+        ],
+        None => [reading(device, DISPLAY_AXIS), None, None],
+    }
+}
 
 pub struct WheelReader {
     stop: Arc<AtomicBool>,
@@ -23,7 +43,7 @@ pub struct WheelReader {
 }
 
 impl WheelReader {
-    pub fn start() -> Self {
+    pub fn start(map: Option<AxisMap>) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
         let thread = std::thread::spawn(move || {
@@ -33,14 +53,20 @@ impl WheelReader {
                         device, received, ..
                     } => {
                         if device.is_observed_target() {
-                            let steering = device.value(GENERIC_DESKTOP_PAGE, X_USAGE);
-                            shared::record_report(steering, received);
+                            shared::record_report(readings(device, map), received);
                         }
                     }
                     Event::Connected(device) => {
+                        if device.is_observed_target() {
+                            shared::WHEEL_CONNECTED.store(true, Ordering::Relaxed);
+                        }
                         log_file::send(format!("controller connected {}", device.label()));
                     }
                     Event::Disconnected(device) => {
+                        if device.is_observed_target() {
+                            shared::WHEEL_CONNECTED.store(false, Ordering::Relaxed);
+                            shared::clear_axes();
+                        }
                         log_file::send(format!("controller disconnected {}", device.label()));
                     }
                     Event::Tick(_) => {

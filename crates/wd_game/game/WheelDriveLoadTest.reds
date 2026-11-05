@@ -1,10 +1,12 @@
-// Game test. During pause it shows a line of text with the live wheel value and a value the
-// comma and period keys change. It changes nothing else in the game.
+// Game test. Tells the plugin each frame whether the player is driving, because the wheel must
+// only apply then. During pause it shows the live wheel value and a value the comma and period
+// keys change.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
 native func WheelDriveTest_Read() -> Int32;
 native func WheelDriveTest_Key() -> Int32;
+native func WheelDriveTest_SetDriving(driving: Bool);
 
 public class WheelDriveTestTick extends DelayCallback {
     public let service: wref<WheelDriveTestService>;
@@ -18,6 +20,7 @@ public class WheelDriveTestTick extends DelayCallback {
 
 public class WheelDriveTestService extends ScriptableService {
     private let m_active: Bool;
+    private let m_driving: Bool;
     private let m_paused: Bool;
     private let m_steering: Int32;
     private let m_keys: Int32;
@@ -60,6 +63,8 @@ public class WheelDriveTestService extends ScriptableService {
     private cb func OnSessionEnd(event: ref<GameSessionEvent>) {
         this.m_active = false;
         this.m_paused = false;
+        this.m_driving = false;
+        WheelDriveTest_SetDriving(false);
         WheelDriveTest_Event("session-end");
         this.HideText();
     }
@@ -90,8 +95,20 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         this.m_steering = WheelDriveTest_Read();
+        this.UpdateDriving();
         this.UpdateText();
         this.ScheduleTick();
+    }
+
+    private func UpdateDriving() {
+        let game = GetGameInstance();
+        let player = GetPlayer(game);
+        let driving = IsDefined(player) && VehicleComponent.IsDriver(game, player);
+        WheelDriveTest_SetDriving(driving);
+        if NotEquals(driving, this.m_driving) {
+            this.m_driving = driving;
+            WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
+        }
     }
 
     private func ScheduleTick() {

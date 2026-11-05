@@ -1,20 +1,24 @@
-//! Game test plugin. It reads the wheel, gives scripts its value for an on-screen test during
-//! pause, and measures timing. It sends nothing to the wheel and calls no game function.
+//! Game test plugin. It reads the wheel, answers the game's gamepad polls with calibrated wheel
+//! values while the player is driving, and measures timing. It sends nothing to the wheel.
 
 // The loader entry points are compiled out of test builds, which leaves their callees unused.
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
+mod drive;
 mod latency;
 mod log_file;
 mod shared;
 mod wheel;
+mod xinput_hook;
 
 use red4ext_rs::{
     Exportable, GlobalExport, Plugin, SdkEnv, SemVer, U16CStr, export_plugin_symbols, exports,
     global, log, wcstr,
 };
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
+use wd_core::config;
 
 static LOGGER_STOP: AtomicBool = AtomicBool::new(false);
 static THREADS: Mutex<Option<(wheel::WheelReader, log_file::Logger)>> = Mutex::new(None);
@@ -27,7 +31,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 2, 0);
+    const VERSION: SemVer = SemVer::new(0, 3, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -35,19 +39,24 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_Event", event)),
             GlobalExport(global!(c"WheelDriveTest_Read", read)),
             GlobalExport(global!(c"WheelDriveTest_Key", key)),
+            GlobalExport(global!(c"WheelDriveTest_SetDriving", set_driving)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.2.0".to_owned());
-        let reader = wheel::WheelReader::start();
+        log_file::send("plugin loaded, version 0.3.0".to_owned());
+        load_profile();
+        xinput_hook::attach(env);
+        let map = shared::PROFILE.get().map(|profile| profile.axes);
+        let reader = wheel::WheelReader::start(map);
         *THREADS.lock().unwrap_or_else(PoisonError::into_inner) = Some((reader, logger));
     }
 
-    fn on_unload(_env: &SdkEnv) {
+    fn on_unload(env: &SdkEnv) {
         log_file::send("plugin unloading".to_owned());
+        xinput_hook::detach(env);
         let threads = THREADS
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -60,6 +69,33 @@ impl Plugin for LoadTest {
 }
 
 export_plugin_symbols!(LoadTest);
+
+/// Without usable settings the wheel never drives; the game keeps its normal input.
+fn load_profile() {
+    let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+        log_file::send("no settings folder, so the wheel will not drive".to_owned());
+        return;
+    };
+    let path = PathBuf::from(base).join("WheelDrive").join("profile.cfg");
+    match config::load(&path) {
+        Ok(loaded) => {
+            log_file::send(format!(
+                "settings loaded: steering {} throttle {} brake {}",
+                loaded.config.axes.steering, loaded.config.axes.throttle, loaded.config.axes.brake
+            ));
+            let _ = shared::PROFILE.set(loaded.config);
+        }
+        Err(problem) => {
+            log_file::send(format!(
+                "no usable settings, so the wheel will not drive: {problem}"
+            ));
+        }
+    }
+}
+
+fn set_driving(driving: bool) {
+    shared::set_driving(driving);
+}
 
 fn ping(value: i32) -> i32 {
     let reply = value.wrapping_add(PING_OFFSET);

@@ -1,6 +1,6 @@
 # Decision D19: how wheel input reaches the game
 
-Status: proposed, awaiting the user. Nothing here has been tested.
+Status: accepted by the user on 2026-11-04 for building the test. Nothing here has been tested in the game, and the route can still change on the results.
 Date: 2026-11-04
 Requirements affected: steering, throttle, brake and button input. User requirement: lowest possible latency.
 
