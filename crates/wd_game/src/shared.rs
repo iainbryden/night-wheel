@@ -3,9 +3,11 @@
 
 use crate::drive;
 use crate::latency::{Histogram, Summary};
+use crate::settings::ROWS;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
+use wd_core::assignment::Bindings;
 use wd_core::config::Config;
 
 /// A read this soon after a report counts as "wheel moving" for value age.
@@ -31,8 +33,16 @@ static LAST_READ_US: AtomicU64 = AtomicU64::new(NEVER);
 static REPORTS: AtomicU32 = AtomicU32::new(0);
 static KEYS: AtomicU32 = AtomicU32::new(0);
 static TOTAL_KEYS: AtomicU32 = AtomicU32::new(0);
-static BUTTONS: AtomicU64 = AtomicU64::new(0);
-static HAT: AtomicI32 = AtomicI32::new(NO_READING);
+/// The controls held now, as control bits.
+static CONTROLS: AtomicU64 = AtomicU64::new(0);
+/// Presses since the game's last poll, and since the settings screen last looked. A dial click can
+/// start and end between two polls, so each press is kept until it has been seen.
+static PRESSED_FOR_POLL: AtomicU64 = AtomicU64::new(0);
+static PRESSED_FOR_SCREEN: AtomicU64 = AtomicU64::new(0);
+/// Controls that must be released before they count again.
+static WAITING: AtomicU64 = AtomicU64::new(0);
+/// The control bit bound to each settings row, or zero.
+static ROW_BITS: [AtomicU64; ROWS.len()] = [const { AtomicU64::new(0) }; ROWS.len()];
 /// The steering speed multiplier for this launch, set once before the game asks for it.
 static STEERING_SPEED: OnceLock<f32> = OnceLock::new();
 
@@ -60,11 +70,12 @@ fn micros_since_start(instant: Instant) -> u64 {
 /// Called by the wheel reader for each wheel report.
 pub fn record_report(axes: [Option<i64>; 3], buttons: u64, hat: Option<i64>, received: Instant) {
     let now = Instant::now();
-    BUTTONS.store(buttons, Ordering::Relaxed);
-    HAT.store(
-        hat.map_or(NO_READING, |value| value as i32),
-        Ordering::Relaxed,
-    );
+    let controls = drive::control_bits(buttons, hat);
+    let pressed = controls & !CONTROLS.swap(controls, Ordering::Relaxed);
+    if pressed != 0 {
+        PRESSED_FOR_POLL.fetch_or(pressed, Ordering::Relaxed);
+        PRESSED_FOR_SCREEN.fetch_or(pressed, Ordering::Relaxed);
+    }
     for (slot, value) in AXES.iter().zip(axes) {
         if let Some(value) = value {
             slot.store(value as i32, Ordering::Relaxed);
@@ -111,8 +122,9 @@ pub fn clear_axes() {
     for axis in &AXES {
         axis.store(NO_READING, Ordering::Relaxed);
     }
-    BUTTONS.store(0, Ordering::Relaxed);
-    HAT.store(NO_READING, Ordering::Relaxed);
+    CONTROLS.store(0, Ordering::Relaxed);
+    PRESSED_FOR_POLL.store(0, Ordering::Relaxed);
+    PRESSED_FOR_SCREEN.store(0, Ordering::Relaxed);
 }
 
 /// Whether the wheel may control the game at this moment.
@@ -190,27 +202,44 @@ pub fn curve_line() -> String {
     format_curve(values)
 }
 
-/// The buttons held now as text, for the settings screen. It allocates, so it runs only while
-/// that screen is open and never on the steering path.
-pub fn held_controls() -> String {
-    format_held(BUTTONS.load(Ordering::Relaxed), HAT.load(Ordering::Relaxed))
+/// Called at each game poll. The gamepad buttons the wheel is pressing now. Atomics only.
+pub fn pad_buttons(may_apply: bool) -> u16 {
+    let held = CONTROLS.load(Ordering::Relaxed);
+    let pressed = PRESSED_FOR_POLL.swap(0, Ordering::Relaxed);
+    let waiting = WAITING.load(Ordering::Relaxed);
+    let (counted, waiting) = drive::gate_controls(held, pressed, waiting, may_apply);
+    WAITING.store(waiting, Ordering::Relaxed);
+    drive::pad_flags(
+        counted,
+        ROW_BITS
+            .iter()
+            .zip(ROWS)
+            .map(|(bit, (_, flag))| (bit.load(Ordering::Relaxed), flag)),
+    )
 }
 
-/// Names controls only by the numbers they report, which says nothing of where they are on the
-/// wheel. The hat counts as held only within its reported 0 to 7.
-fn format_held(buttons: u64, hat: i32) -> String {
-    let mut names: Vec<String> = (0..64)
-        .filter(|bit| buttons & (1u64 << bit) != 0)
-        .map(|bit| format!("BUTTON {}", bit + 1))
-        .collect();
-    if (0..=7).contains(&hat) {
-        names.push(format!("HAT {hat}"));
+/// Publishes bindings to the game's poll.
+pub fn set_row_bits(bindings: &Bindings) {
+    for (slot, (action, _)) in ROW_BITS.iter().zip(ROWS) {
+        let bit = bindings.get(action).and_then(drive::bit_for).unwrap_or(0);
+        slot.store(bit, Ordering::Relaxed);
     }
-    if names.is_empty() {
-        "NONE".to_owned()
-    } else {
-        names.join(" + ")
-    }
+}
+
+/// The controls held now, and those pressed since the settings screen last looked.
+pub fn controls_for_screen() -> (u64, u64) {
+    (
+        CONTROLS.load(Ordering::Relaxed),
+        PRESSED_FOR_SCREEN.swap(0, Ordering::Relaxed),
+    )
+}
+
+pub fn controls_held() -> u64 {
+    CONTROLS.load(Ordering::Relaxed)
+}
+
+pub fn now_ms() -> u64 {
+    micros_since_start(Instant::now()) / 1000
 }
 
 pub fn set_steering_speed(value: f32) {
@@ -267,25 +296,8 @@ pub fn stats_line() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CURVE_BUCKETS, NO_READING, curve_bucket, format_curve, format_held, format_summary,
-    };
+    use super::{CURVE_BUCKETS, curve_bucket, format_curve, format_summary};
     use crate::latency::Summary;
-
-    #[test]
-    fn nothing_held_reads_as_none() {
-        assert_eq!(format_held(0, NO_READING), "NONE");
-        assert_eq!(format_held(0, 8), "NONE");
-        assert_eq!(format_held(0, 15), "NONE");
-    }
-
-    #[test]
-    fn held_controls_are_listed_by_their_reported_numbers() {
-        assert_eq!(format_held(0b1, 8), "BUTTON 1");
-        assert_eq!(format_held(0b101, 0), "BUTTON 1 + BUTTON 3 + HAT 0");
-        assert_eq!(format_held(0, 7), "HAT 7");
-        assert_eq!(format_held(1u64 << 63, 8), "BUTTON 64");
-    }
 
     #[test]
     fn stick_values_land_in_the_table() {

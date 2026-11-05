@@ -2,7 +2,8 @@
 // only apply then. Four steering speed values are multiplied in memory when the game starts, for
 // every vehicle drive model, by an amount the plugin supplies. Nothing is saved.
 // During pause, it tests one way into a settings screen: a WHEEL SETTINGS entry in the pause menu,
-// with the period key as a fallback. The screen only shows live values and has no settings yet.
+// with the period key as a fallback. The plugin runs the screen, and this script passes it keys and
+// shows its text. While the screen is open, the pause menu's entries do nothing.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -11,7 +12,10 @@ native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
 native func WheelDriveTest_SteeringAction(value: Float);
 native func WheelDriveTest_SteeringSpeed() -> Float;
-native func WheelDriveTest_HeldControls() -> String;
+native func WheelDriveTest_ScreenOpen();
+native func WheelDriveTest_ScreenClose();
+native func WheelDriveTest_ScreenCommand(code: Int32);
+native func WheelDriveTest_ScreenTick(steering: Int32) -> String;
 
 public class WheelDriveStartupRates extends ScriptableTweak {
     protected cb func OnApply() -> Void {
@@ -51,12 +55,15 @@ private func PopulateMenuItemList() -> Void {
 
 @wrapMethod(PauseMenuGameController)
 protected cb func OnMenuItemActivated(index: Int32, target: ref<ListItemController>) -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) && service.IsScreenOpen() {
+        return true;
+    }
     let data = target.GetData() as PauseMenuListItemData;
     if IsDefined(data) && Equals(data.label, WheelDriveTestService.EntryLabel()) {
         WheelDriveTest_Event("wheel-entry-activated");
-        let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
         if IsDefined(service) {
-            service.ToggleScreen();
+            service.OpenScreen();
         } else {
             WheelDriveTest_Event("wheel-service-missing");
         }
@@ -85,7 +92,6 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_refresh: ref<inkAnimProxy>;
     private let m_screen: ref<inkCanvas>;
     private let m_screenText: ref<inkText>;
-    private let m_held: String;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -139,9 +145,34 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         WheelDriveTest_Key();
-        if this.m_paused && Equals(event.GetKey(), EInputKey.IK_Period) {
-            WheelDriveTest_Event("wheel-key-activated");
-            this.ToggleScreen();
+        if !this.m_paused {
+            return;
+        }
+        if !this.IsScreenOpen() {
+            if Equals(event.GetKey(), EInputKey.IK_Period) {
+                WheelDriveTest_Event("wheel-key-activated");
+                this.OpenScreen();
+            }
+            return;
+        }
+        switch event.GetKey() {
+            case EInputKey.IK_Up:
+                WheelDriveTest_ScreenCommand(1);
+                break;
+            case EInputKey.IK_Down:
+                WheelDriveTest_ScreenCommand(2);
+                break;
+            case EInputKey.IK_Enter:
+                WheelDriveTest_ScreenCommand(3);
+                break;
+            case EInputKey.IK_Delete:
+                WheelDriveTest_ScreenCommand(4);
+                break;
+            case EInputKey.IK_Period:
+                WheelDriveTest_ScreenCommand(5);
+                break;
+            default:
+                break;
         }
     }
 
@@ -226,7 +257,7 @@ public class WheelDriveTestService extends ScriptableService {
         hint.SetAnchor(inkEAnchor.TopCenter);
         hint.SetAnchorPoint(0.5, 0.0);
         hint.SetMargin(new inkMargin(0.0, 40.0, 0.0, 0.0));
-        hint.SetText("NIGHT WHEEL TEST  PERIOD ALSO OPENS WHEEL SETTINGS");
+        hint.SetText("NIGHT WHEEL TEST");
         hint.Reparent(layer.GetVirtualWindow());
         this.m_hint = hint;
         this.StartRefresh();
@@ -257,15 +288,14 @@ public class WheelDriveTestService extends ScriptableService {
         this.UpdateScreen();
     }
 
-    public func ToggleScreen() {
-        if IsDefined(this.m_screen) {
-            this.HideScreen();
-        } else {
-            this.ShowScreen();
-        }
+    public func IsScreenOpen() -> Bool {
+        return IsDefined(this.m_screen);
     }
 
-    private func ShowScreen() {
+    public func OpenScreen() {
+        if IsDefined(this.m_screen) {
+            return;
+        }
         let layer = this.MenuLayer();
         if !IsDefined(layer) {
             WheelDriveTest_Event("menu-layer-missing");
@@ -278,23 +308,25 @@ public class WheelDriveTestService extends ScriptableService {
         let back = new inkRectangle();
         back.SetAnchor(inkEAnchor.Centered);
         back.SetAnchorPoint(0.5, 0.5);
-        back.SetSize(new Vector2(1500.0, 520.0));
+        back.SetSize(new Vector2(1500.0, 860.0));
         back.SetTintColor(new HDRColor(0.03, 0.03, 0.05, 1.0));
         back.Reparent(canvas);
 
-        let text = this.NewText(44);
+        let text = this.NewText(36);
         text.SetAnchor(inkEAnchor.Centered);
         text.SetAnchorPoint(0.5, 0.5);
         text.Reparent(canvas);
 
         this.m_screen = canvas;
         this.m_screenText = text;
+        WheelDriveTest_ScreenOpen();
         this.UpdateScreen();
         WheelDriveTest_Event("wheel-screen-open");
     }
 
     private func HideScreen() {
         if IsDefined(this.m_screen) {
+            WheelDriveTest_ScreenClose();
             let layer = this.MenuLayer();
             if IsDefined(layer) {
                 layer.GetVirtualWindow().RemoveChild(this.m_screen);
@@ -321,12 +353,12 @@ public class WheelDriveTestService extends ScriptableService {
 
     private func UpdateScreen() {
         if IsDefined(this.m_screenText) {
-            let held = WheelDriveTest_HeldControls();
-            if NotEquals(held, this.m_held) {
-                this.m_held = held;
-                WheelDriveTest_Event(s"held: \(held)");
+            let text = WheelDriveTest_ScreenTick(this.m_steering);
+            if StrLen(text) == 0 {
+                this.HideScreen();
+            } else {
+                this.m_screenText.SetText(text);
             }
-            this.m_screenText.SetText(s"NIGHT WHEEL\nSTEERING VALUE \(this.m_steering)\nHOLDING \(held)\nSTEERING SPEED X\(FloatToString(WheelDriveTest_SteeringSpeed()))\nPERIOD CLOSES THIS");
         }
     }
 }

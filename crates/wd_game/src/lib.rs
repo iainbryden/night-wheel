@@ -7,6 +7,7 @@
 mod drive;
 mod latency;
 mod log_file;
+mod settings;
 mod shared;
 mod wheel;
 mod xinput_hook;
@@ -18,10 +19,13 @@ use red4ext_rs::{
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
-use wd_core::config;
+use wd_core::config::{self, Config};
 
 static LOGGER_STOP: AtomicBool = AtomicBool::new(false);
 static THREADS: Mutex<Option<(wheel::WheelReader, log_file::Logger)>> = Mutex::new(None);
+/// The settings, with their bindings, as the settings screen edits them.
+static SETTINGS: Mutex<Option<Config>> = Mutex::new(None);
+static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 /// Added to the value a script sends, so a reply proves the plugin handled the call.
 const PING_OFFSET: i32 = 1;
@@ -31,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 9, 0);
+    const VERSION: SemVer = SemVer::new(0, 10, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -42,14 +46,17 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_SetDriving", set_driving)),
             GlobalExport(global!(c"WheelDriveTest_SteeringAction", steering_action)),
             GlobalExport(global!(c"WheelDriveTest_SteeringSpeed", steering_speed)),
-            GlobalExport(global!(c"WheelDriveTest_HeldControls", held_controls)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenOpen", screen_open)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenClose", screen_close)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenCommand", screen_command)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenTick", screen_tick)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.9.0".to_owned());
+        log_file::send("plugin loaded, version 0.10.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -75,19 +82,25 @@ impl Plugin for LoadTest {
 
 export_plugin_symbols!(LoadTest);
 
+fn profile_path() -> Option<PathBuf> {
+    let base = std::env::var_os("LOCALAPPDATA")?;
+    Some(PathBuf::from(base).join("WheelDrive").join("profile.cfg"))
+}
+
 /// Without usable settings the wheel never drives; the game keeps its normal input.
 fn load_profile() {
-    let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+    let Some(path) = profile_path() else {
         log_file::send("no settings folder, so the wheel will not drive".to_owned());
         return;
     };
-    let path = PathBuf::from(base).join("WheelDrive").join("profile.cfg");
     match config::load(&path) {
         Ok(loaded) => {
             log_file::send(format!(
                 "settings loaded: steering {} throttle {} brake {}",
                 loaded.config.axes.steering, loaded.config.axes.throttle, loaded.config.axes.brake
             ));
+            shared::set_row_bits(&loaded.config.bindings);
+            *SETTINGS.lock().unwrap_or_else(PoisonError::into_inner) = Some(loaded.config.clone());
             let _ = shared::PROFILE.set(loaded.config);
         }
         Err(problem) => {
@@ -121,8 +134,76 @@ fn steering_speed() -> f32 {
     shared::steering_speed()
 }
 
-fn held_controls() -> String {
-    shared::held_controls()
+fn screen_open() {
+    shared::controls_for_screen();
+    *SCREEN.lock().unwrap_or_else(PoisonError::into_inner) = Some(settings::Screen::new());
+}
+
+fn screen_close() {
+    *SCREEN.lock().unwrap_or_else(PoisonError::into_inner) = None;
+}
+
+/// Publishes and saves changed bindings. A failed save says so on the screen, and the bindings
+/// still apply until the game closes.
+fn bindings_changed(config: &Config, screen: &mut settings::Screen) {
+    shared::set_row_bits(&config.bindings);
+    let saved = profile_path()
+        .ok_or_else(|| "no settings folder".to_owned())
+        .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
+    match saved {
+        Ok(()) => {
+            screen.set_message("SAVED".to_owned());
+            log_file::send(format!(
+                "bindings saved: {}",
+                config
+                    .bindings
+                    .iter()
+                    .map(|(action, control)| format!("{}={control}", action.key()))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ));
+        }
+        Err(problem) => {
+            screen.set_message("COULD NOT SAVE".to_owned());
+            log_file::send(format!("bindings not saved: {problem}"));
+        }
+    }
+}
+
+fn screen_command(code: i32) {
+    let Some(command) = settings::Command::from_code(code) else {
+        return;
+    };
+    let mut screen = SCREEN.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let (Some(screen), Some(config)) = (screen.as_mut(), settings.as_mut()) else {
+        return;
+    };
+    let held = shared::controls_held();
+    if screen.command(command, shared::now_ms(), held, &mut config.bindings) {
+        bindings_changed(config, screen);
+    }
+}
+
+/// Runs the screen for one refresh and returns its text, or nothing when it should close.
+fn screen_tick(steering: i32) -> String {
+    let mut screen = SCREEN.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let Some(screen) = screen.as_mut() else {
+        return String::new();
+    };
+    let Some(config) = settings.as_mut() else {
+        return "NIGHT WHEEL\nNO CALIBRATION FILE, SO BINDING IS NOT AVAILABLE\nPERIOD CLOSES THIS"
+            .to_owned();
+    };
+    let (held, pressed) = shared::controls_for_screen();
+    if screen.wheel(shared::now_ms(), held, pressed, &mut config.bindings) {
+        bindings_changed(config, screen);
+    }
+    if screen.done() {
+        return String::new();
+    }
+    screen.text(&config.bindings, steering, shared::steering_speed(), held)
 }
 
 fn set_driving(driving: bool) {

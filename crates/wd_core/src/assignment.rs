@@ -22,11 +22,14 @@ pub enum Action {
     RadioNext,
     PauseMenu,
     ProfileNext,
+    Autodrive,
+    RadioMenu,
+    CombatMode,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 16] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -40,6 +43,9 @@ impl Action {
         Self::RadioNext,
         Self::PauseMenu,
         Self::ProfileNext,
+        Self::Autodrive,
+        Self::RadioMenu,
+        Self::CombatMode,
     ];
 
     /// Stable name used in saved settings. Do not change once released.
@@ -58,6 +64,9 @@ impl Action {
             Self::RadioNext => "radio_next",
             Self::PauseMenu => "pause_menu",
             Self::ProfileNext => "profile_next",
+            Self::Autodrive => "autodrive",
+            Self::RadioMenu => "radio_menu",
+            Self::CombatMode => "combat_mode",
         }
     }
 
@@ -77,6 +86,9 @@ impl Action {
             Self::RadioNext => "Next radio station",
             Self::PauseMenu => "Pause menu",
             Self::ProfileNext => "Next profile",
+            Self::Autodrive => "Autodrive",
+            Self::RadioMenu => "Radio",
+            Self::CombatMode => "Combat mode",
         }
     }
 

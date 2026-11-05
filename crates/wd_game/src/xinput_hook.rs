@@ -1,5 +1,6 @@
 //! Answers the game's gamepad polls with wheel values. The value is computed when the game
-//! asks, so nothing waits on a timer. Sends nothing to the wheel. Vibration is not touched.
+//! asks, so nothing waits on a timer. Bound wheel buttons press gamepad buttons the same way.
+//! Sends nothing to the wheel. Vibration is not touched.
 
 use crate::{drive, log_file, shared};
 use red4ext_rs::{SdkEnv, hooks};
@@ -36,11 +37,12 @@ fn available() -> bool {
 }
 
 /// Documentation says the packet number changes only when the state changes.
-fn packet_for(output: drive::Output, pad_packet: u32) -> u32 {
+fn packet_for(output: drive::Output, buttons: u16, pad_packet: u32) -> u32 {
     let key = u64::from(output.thumb_x as u16)
         | u64::from(output.left_trigger) << 16
         | u64::from(output.right_trigger) << 24
-        | u64::from(pad_packet) << 32;
+        | u64::from(buttons) << 32
+        | u64::from(pad_packet) << 48;
     if LAST_OUTPUT.swap(key, Ordering::Relaxed) == key {
         PACKET.load(Ordering::Relaxed)
     } else {
@@ -77,16 +79,17 @@ unsafe extern "C" fn get_state_detour(
         right_trigger: state.Gamepad.bRightTrigger,
     };
     let mut output = pad;
-    if shared::wheel_may_apply()
-        && let Some(config) = shared::PROFILE.get()
-    {
+    let may_apply = shared::wheel_may_apply();
+    let buttons = state.Gamepad.wButtons.0 | shared::pad_buttons(may_apply);
+    if may_apply && let Some(config) = shared::PROFILE.get() {
         output = drive::merge(pad, drive::output(config, shared::raw_axes()));
         shared::record_applied(output.thumb_x);
     }
     state.Gamepad.sThumbLX = output.thumb_x;
     state.Gamepad.bLeftTrigger = output.left_trigger;
     state.Gamepad.bRightTrigger = output.right_trigger;
-    state.dwPacketNumber = packet_for(output, state.dwPacketNumber);
+    state.Gamepad.wButtons = XINPUT_GAMEPAD_BUTTON_FLAGS(buttons);
+    state.dwPacketNumber = packet_for(output, buttons, state.dwPacketNumber);
     ERROR_SUCCESS
 }
 
