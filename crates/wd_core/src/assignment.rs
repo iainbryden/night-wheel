@@ -33,12 +33,14 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     Scanner,
-    Hover,
+    Flight,
+    FlyUp,
+    FlyDown,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 27] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -63,7 +65,9 @@ impl Action {
         Self::ZoomIn,
         Self::ZoomOut,
         Self::Scanner,
-        Self::Hover,
+        Self::Flight,
+        Self::FlyUp,
+        Self::FlyDown,
     ];
 
     /// Stable name used in saved settings. Do not change once released.
@@ -93,7 +97,9 @@ impl Action {
             Self::ZoomIn => "zoom_in",
             Self::ZoomOut => "zoom_out",
             Self::Scanner => "scanner",
-            Self::Hover => "hover",
+            Self::Flight => "hover",
+            Self::FlyUp => "fly_up",
+            Self::FlyDown => "fly_down",
         }
     }
 
@@ -124,7 +130,9 @@ impl Action {
             Self::ZoomIn => "Zoom in",
             Self::ZoomOut => "Zoom out",
             Self::Scanner => "Scanner",
-            Self::Hover => "Hover",
+            Self::Flight => "Flight mode",
+            Self::FlyUp => "Climb",
+            Self::FlyDown => "Descend",
         }
     }
 

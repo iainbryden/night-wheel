@@ -30,7 +30,7 @@ native func WheelDriveTest_ScreenBoostRow() -> Int32;
 native func WheelDriveTest_BoostPercent() -> Int32;
 native func WheelDriveTest_BoostAdjust(steps: Int32);
 native func WheelDriveTest_BoostWanted() -> Bool;
-native func WheelDriveTest_HoverWanted() -> Bool;
+native func WheelDriveTest_ScriptHeld() -> Int32;
 native func WheelDriveTest_Throttle() -> Float;
 native func WheelDriveTest_Brake() -> Float;
 native func WheelDriveTest_SetAutopilot(on: Bool);
@@ -147,12 +147,17 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_listedMenuFunctions: Bool;
     private let m_inMenu: Bool;
     private let m_turn: Float;
-    private let m_hovering: Bool;
-    private let m_hoverBase: Float;
-    private let m_hoverEnd: Float;
-    private let m_hoverLastYaw: Float;
-    private let m_hoverLogged: Float;
-    private let m_hoverLastTime: Float;
+    private let m_flying: Bool;
+    private let m_landing: Bool;
+    private let m_flightStart: Float;
+    private let m_flightTarget: Float;
+    private let m_flightLastTime: Float;
+    private let m_flightLogged: Float;
+    private let m_flightLastYaw: Float;
+    private let m_flightYawRate: Float;
+    private let m_flightLastPitch: Float;
+    private let m_flightLastRoll: Float;
+    private let m_landingStill: Float;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -279,10 +284,12 @@ public class WheelDriveTestService extends ScriptableService {
             }
             this.UpdateAutopilot(player);
             this.UpdateBoost(player);
-            this.UpdateHover(player);
+            this.UpdateFlight(player, (actions & 64) != 0);
         } else {
             this.EndBoost("not driving");
-            this.EndHover("not driving", 0.0);
+            if !inMenu {
+                this.EndFlight("not driving");
+            }
             if this.m_autopilot {
                 this.m_autopilot = false;
                 WheelDriveTest_SetAutopilot(false);
@@ -367,67 +374,128 @@ public class WheelDriveTestService extends ScriptableService {
         vehicle.QueueEvent(event);
     }
 
-    // Hover holds the car at a fixed height above where it was when the control was pressed, using
-    // physics pushes. With the tires off the ground the game's steering can't turn it, so the wheel
-    // turns it with a pair of opposed side pushes at nose and tail, and the sideways slide is
-    // damped so the car travels where it points. The pedals push it along. Every strength here is
-    // a provisional test value. It changes no vehicle data and saves nothing.
-    private func UpdateHover(player: ref<PlayerPuppet>) {
+    // Flight mode holds the car up with physics pushes. The wheel sets a turn rate, which is measured
+    // and corrected each frame so centring the wheel stops the turn. Pairs of pushes keep the car
+    // level. The pedals give thrust and braking, and momentum is kept. Switching off brings the car
+    // down at a limited speed. Every strength is a provisional test value. It changes no vehicle
+    // data and saves nothing.
+    private func UpdateFlight(player: ref<PlayerPuppet>, toggled: Bool) {
         let vehicle = GetMountedVehicle(player);
         if !IsDefined(vehicle) {
             return;
         }
+        let position = vehicle.GetWorldPosition();
+        if toggled {
+            if this.m_flying && !this.m_landing {
+                this.m_landing = true;
+                this.m_landingStill = 0.0;
+                WheelDriveTest_Event("flight: landing");
+            } else {
+                this.m_flying = true;
+                this.m_landing = false;
+                this.m_flightStart = position.Z;
+                this.m_flightTarget = position.Z + 3.0;
+                this.m_flightLastYaw = vehicle.GetWorldYaw();
+                this.m_flightYawRate = 0.0;
+                let startForward = vehicle.GetWorldForward();
+                let startRight = vehicle.GetWorldRight();
+                this.m_flightLastPitch = startForward.Z;
+                this.m_flightLastRoll = startRight.Z;
+                WheelDriveTest_Event(s"flight: on at height \(FloatToString(position.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
+            }
+        }
         let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
-        let elapsed = now - this.m_hoverLastTime;
-        this.m_hoverLastTime = now;
-        if elapsed <= 0.0 || elapsed > 0.1 {
+        let elapsed = now - this.m_flightLastTime;
+        this.m_flightLastTime = now;
+        if !this.m_flying || elapsed <= 0.0 || elapsed > 0.1 {
+            return;
+        }
+        if this.m_autopilot {
+            this.EndFlight("autodrive");
             return;
         }
         let mass = vehicle.GetTotalMass();
-        let position = vehicle.GetWorldPosition();
         let velocity = vehicle.GetLinearVelocity();
-        let gravity = 9.81;
-        if !WheelDriveTest_HoverWanted() || this.m_autopilot {
-            this.EndHover("released", now);
-            // Eases the landing for a moment after release.
-            if now < this.m_hoverEnd && velocity.Z < -1.5 {
-                this.Push(vehicle, position, 0.0, 0.0, mass * gravity * 0.7 * elapsed);
-            }
-            return;
-        }
-        if !this.m_hovering {
-            this.m_hovering = true;
-            this.m_hoverBase = position.Z;
-            this.m_hoverLastYaw = vehicle.GetWorldYaw();
-            this.m_hoverLogged = now;
-            WheelDriveTest_Event(s"hover: on at height \(FloatToString(position.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
-        }
-        // Height.
-        let wanted = ClampF((this.m_hoverBase + 2.0 - position.Z) * 2.0, -2.0, 3.0);
-        let lift = ClampF(gravity + (wanted - velocity.Z) * 6.0, 0.0, 25.0);
-        this.Push(vehicle, position, 0.0, 0.0, mass * lift * elapsed);
-
         let forward = vehicle.GetWorldForward();
         let right = vehicle.GetWorldRight();
 
-        // Steering: opposed side pushes at the nose and tail.
-        let turn = mass * this.m_turn * 5.0 * elapsed;
-        let nose = new Vector4(position.X + forward.X * 2.0, position.Y + forward.Y * 2.0, position.Z, 1.0);
-        let tail = new Vector4(position.X - forward.X * 2.0, position.Y - forward.Y * 2.0, position.Z, 1.0);
-        this.Push(vehicle, nose, right.X * turn, right.Y * turn, 0.0);
-        this.Push(vehicle, tail, -right.X * turn, -right.Y * turn, 0.0);
+        // Height.
+        let held = WheelDriveTest_ScriptHeld();
+        let climb = 0.0;
+        if (held & 128) != 0 {
+            climb += 8.0;
+        }
+        if (held & 256) != 0 {
+            climb -= 8.0;
+        }
+        this.m_flightTarget = ClampF(this.m_flightTarget + climb * elapsed, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
+        let wantedRise = ClampF((this.m_flightTarget - position.Z) * 1.5, -8.0, 8.0);
+        if this.m_landing {
+            wantedRise = -4.0;
+            this.m_landingStill = AbsF(velocity.Z) < 0.5 ? this.m_landingStill + elapsed : 0.0;
+            if this.m_landingStill > 0.5 {
+                this.EndFlight("landed");
+                return;
+            }
+        }
+        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, 0.0, 25.0);
 
-        // Travel where it points.
+        // Turn rate, in degrees a second, with a positive wheel turning the heading negative.
+        let yaw = vehicle.GetWorldYaw();
+        let yawStep = yaw - this.m_flightLastYaw;
+        while yawStep > 180.0 {
+            yawStep -= 360.0;
+        }
+        while yawStep < -180.0 {
+            yawStep += 360.0;
+        }
+        this.m_flightLastYaw = yaw;
+        this.m_flightYawRate = this.m_flightYawRate * 0.5 + (yawStep / elapsed) * 0.5;
+        let yawError = -this.m_turn * 60.0 - this.m_flightYawRate;
+        let turnPush = ClampF(-Deg2Rad(yawError) * 2.7, -12.0, 12.0);
+
+        // Level, from how far the nose and right side are above level and how fast they move.
+        let pitch = forward.Z;
+        let roll = right.Z;
+        let pitchPush = ClampF(-(pitch * 8.0 + (pitch - this.m_flightLastPitch) / elapsed * 2.5), -10.0, 10.0);
+        let rollPush = ClampF(-(roll * 8.0 + (roll - this.m_flightLastRoll) / elapsed * 2.5), -10.0, 10.0);
+        this.m_flightLastPitch = pitch;
+        this.m_flightLastRoll = roll;
+
+        // Thrust along the heading, and braking against the direction of travel. Slide is eased
+        // towards the heading only gently, so momentum carries.
+        let flat = SqrtF(forward.X * forward.X + forward.Y * forward.Y);
+        let aheadX = flat > 0.1 ? forward.X / flat : 0.0;
+        let aheadY = flat > 0.1 ? forward.Y / flat : 0.0;
+        let along = velocity.X * aheadX + velocity.Y * aheadY;
+        let thrust = along < 70.0 ? WheelDriveTest_Throttle() * 12.0 : 0.0;
+        let travel = SqrtF(velocity.X * velocity.X + velocity.Y * velocity.Y);
+        let braking = travel > 0.5 ? WheelDriveTest_Brake() * 10.0 / travel : 0.0;
         let slide = velocity.X * right.X + velocity.Y * right.Y;
-        let correct = -mass * ClampF(slide * 2.0, -12.0, 12.0) * elapsed;
-        let drive = mass * (WheelDriveTest_Throttle() * 8.0 - WheelDriveTest_Brake() * 8.0) * elapsed;
-        this.Push(vehicle, position, right.X * correct + forward.X * drive, right.Y * correct + forward.Y * drive, 0.0);
+        let ease = ClampF(slide * 0.8, -6.0, 6.0);
 
-        if now - this.m_hoverLogged >= 1.0 {
-            let yaw = vehicle.GetWorldYaw();
-            WheelDriveTest_Event(s"hover: height \(FloatToString(position.Z - this.m_hoverBase)), speed \(FloatToString(vehicle.GetCurrentSpeed())), turn \(FloatToString(this.m_turn)), yaw change \(FloatToString(yaw - this.m_hoverLastYaw))");
-            this.m_hoverLastYaw = yaw;
-            this.m_hoverLogged = now;
+        let step = mass * elapsed;
+        this.Push(vehicle, position,
+            (aheadX * thrust - velocity.X * braking - right.X * ease) * step,
+            (aheadY * thrust - velocity.Y * braking - right.Y * ease) * step,
+            lift * step);
+
+        // Opposed pairs turn and level the car without moving it.
+        let pitchStep = pitchPush * step;
+        let turnStep = turnPush * step;
+        let nose = new Vector4(position.X + forward.X * 2.0, position.Y + forward.Y * 2.0, position.Z + forward.Z * 2.0, 1.0);
+        let tail = new Vector4(position.X - forward.X * 2.0, position.Y - forward.Y * 2.0, position.Z - forward.Z * 2.0, 1.0);
+        this.Push(vehicle, nose, right.X * turnStep, right.Y * turnStep, pitchStep);
+        this.Push(vehicle, tail, -right.X * turnStep, -right.Y * turnStep, -pitchStep);
+        let rollStep = rollPush * step;
+        let rightSide = new Vector4(position.X + right.X, position.Y + right.Y, position.Z + right.Z, 1.0);
+        let leftSide = new Vector4(position.X - right.X, position.Y - right.Y, position.Z - right.Z, 1.0);
+        this.Push(vehicle, rightSide, 0.0, 0.0, rollStep);
+        this.Push(vehicle, leftSide, 0.0, 0.0, -rollStep);
+
+        if now - this.m_flightLogged >= 1.0 {
+            this.m_flightLogged = now;
+            WheelDriveTest_Event(s"flight: up \(FloatToString(position.Z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), rise \(FloatToString(velocity.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed())), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), pitch \(FloatToString(pitch)), roll \(FloatToString(roll))");
         }
     }
 
@@ -439,11 +507,11 @@ public class WheelDriveTestService extends ScriptableService {
         vehicle.QueueEvent(event);
     }
 
-    private func EndHover(reason: String, now: Float) {
-        if this.m_hovering {
-            this.m_hovering = false;
-            this.m_hoverEnd = now + 1.5;
-            WheelDriveTest_Event(s"hover: off, \(reason)");
+    private func EndFlight(reason: String) {
+        if this.m_flying {
+            this.m_flying = false;
+            this.m_landing = false;
+            WheelDriveTest_Event(s"flight: off, \(reason)");
         }
     }
 
