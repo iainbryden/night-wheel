@@ -86,6 +86,30 @@ Reports only arrive when something changes, so slow movement inflates value age.
 
 The text is now refreshed by a looping UI animation, using the animation calls Codeware's own buttons use. The looping options were checked only by compiling against the game's scripts. `WheelDriveLoadTest.reds` SHA-256 `bef8054536a9a97aa6547dcd899c634472e529b5aea3248cd4a7cd803bd3df13`. `wd_game.dll` is unchanged. Compiled offline with no warnings from this script; not yet run.
 
+## Retest, 2026-11-04 20:01
+
+Approved by the user; script replaced and hash-checked. G HUB open; Resolve, CurseForge and Chrome closed before the run. Two launches, no crash report, and only `user.gls` changed in the saves folder.
+
+| Question | Result | Evidence |
+|---|---|---|
+| Does the refresh run during pause? | **Yes** | 45 to 76 reads per second, median 62, in all 50 paused seconds; the previous script read in only 2 of 21 |
+| Are wheel reports read during pause? | **Yes** | 5,186 reports while paused |
+| Does the wheel stay readable? | Yes, this run | No disconnect logged; `PID_C24F` afterward |
+| Does X visibly follow the wheel? | Awaiting the user | The log shows reads and new reports together, but not what was on screen |
+
+Timing:
+
+| Measure | Result |
+|---|---|
+| Decoding | Typically at most 2 to 4 microseconds; worst 14 microseconds |
+| Reports while moving | Up to 491 per second |
+| Reads in play | Commonly 45 to 75 per second, about 13 to 22 ms apart |
+| Reads during pause | About 62 per second, close to the 16 ms animation length |
+| Value age at read | Commonly at most 2 ms; up to the 50 ms counting window, inflated when the wheel moves slowly or stops |
+| Stalls in play | Gaps of 100 to 200 ms, mostly in the seconds after loading or resuming; 4 seconds at 11 to 15 reads per second right after one resume |
+
+Frame rate was not measured directly, and scene and G HUB state differ between runs, so these runs do not show whether closing other apps changed the lag.
+
 ## Next step
 
-Get approval to replace the script, then retest with G HUB open and watch for another mode change.
+Get the user's visual result, then research the game's vehicle input path, using the measured update interval as the latency baseline.
