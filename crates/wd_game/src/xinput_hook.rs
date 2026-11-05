@@ -91,6 +91,7 @@ unsafe extern "C" fn get_state_detour(
         shared::record_applied(output.thumb_x);
     }
     shared::set_brake_clear(output.left_trigger < BOOST_BRAKE_LIMIT);
+    shared::set_pedals(output.right_trigger, output.left_trigger);
     state.Gamepad.sThumbLX = output.thumb_x;
     state.Gamepad.bLeftTrigger = output.left_trigger;
     state.Gamepad.bRightTrigger = output.right_trigger;

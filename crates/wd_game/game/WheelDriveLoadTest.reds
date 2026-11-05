@@ -30,6 +30,9 @@ native func WheelDriveTest_ScreenBoostRow() -> Int32;
 native func WheelDriveTest_BoostPercent() -> Int32;
 native func WheelDriveTest_BoostAdjust(steps: Int32);
 native func WheelDriveTest_BoostWanted() -> Bool;
+native func WheelDriveTest_HoverWanted() -> Bool;
+native func WheelDriveTest_Throttle() -> Float;
+native func WheelDriveTest_Brake() -> Float;
 native func WheelDriveTest_SetAutopilot(on: Bool);
 native func WheelDriveTest_ScreenStatus() -> String;
 native func WheelDriveTest_ScreenHints() -> String;
@@ -105,6 +108,18 @@ protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
     return wrappedMethod(e);
 }
 
+// A further try at going back: the pause menu scenario's own back handler.
+@wrapMethod(MenuScenario_PauseMenu)
+protected cb func OnBack() -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) && service.IsScreenOpen() {
+        WheelDriveTest_Event("wheel-back-scenario");
+        WheelDriveTest_ScreenCommand(5);
+        return true;
+    }
+    return wrappedMethod();
+}
+
 public class WheelDriveTestTick extends DelayCallback {
     public let service: wref<WheelDriveTestService>;
 
@@ -131,6 +146,13 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_hints: ref<inkText>;
     private let m_listedMenuFunctions: Bool;
     private let m_inMenu: Bool;
+    private let m_turn: Float;
+    private let m_hovering: Bool;
+    private let m_hoverBase: Float;
+    private let m_hoverEnd: Float;
+    private let m_hoverLastYaw: Float;
+    private let m_hoverLogged: Float;
+    private let m_hoverLastTime: Float;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -257,8 +279,10 @@ public class WheelDriveTestService extends ScriptableService {
             }
             this.UpdateAutopilot(player);
             this.UpdateBoost(player);
+            this.UpdateHover(player);
         } else {
             this.EndBoost("not driving");
+            this.EndHover("not driving", 0.0);
             if this.m_autopilot {
                 this.m_autopilot = false;
                 WheelDriveTest_SetAutopilot(false);
@@ -341,6 +365,86 @@ public class WheelDriveTestService extends ScriptableService {
         event.worldPosition = Vector4.Vector4To3(vehicle.GetWorldPosition());
         event.worldImpulse = new Vector3(forward.X * push, forward.Y * push, forward.Z * push);
         vehicle.QueueEvent(event);
+    }
+
+    // Hover holds the car at a fixed height above where it was when the control was pressed, using
+    // physics pushes. With the tires off the ground the game's steering can't turn it, so the wheel
+    // turns it with a pair of opposed side pushes at nose and tail, and the sideways slide is
+    // damped so the car travels where it points. The pedals push it along. Every strength here is
+    // a provisional test value. It changes no vehicle data and saves nothing.
+    private func UpdateHover(player: ref<PlayerPuppet>) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
+        let elapsed = now - this.m_hoverLastTime;
+        this.m_hoverLastTime = now;
+        if elapsed <= 0.0 || elapsed > 0.1 {
+            return;
+        }
+        let mass = vehicle.GetTotalMass();
+        let position = vehicle.GetWorldPosition();
+        let velocity = vehicle.GetLinearVelocity();
+        let gravity = 9.81;
+        if !WheelDriveTest_HoverWanted() || this.m_autopilot {
+            this.EndHover("released", now);
+            // Eases the landing for a moment after release.
+            if now < this.m_hoverEnd && velocity.Z < -1.5 {
+                this.Push(vehicle, position, 0.0, 0.0, mass * gravity * 0.7 * elapsed);
+            }
+            return;
+        }
+        if !this.m_hovering {
+            this.m_hovering = true;
+            this.m_hoverBase = position.Z;
+            this.m_hoverLastYaw = vehicle.GetWorldYaw();
+            this.m_hoverLogged = now;
+            WheelDriveTest_Event(s"hover: on at height \(FloatToString(position.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
+        }
+        // Height.
+        let wanted = ClampF((this.m_hoverBase + 2.0 - position.Z) * 2.0, -2.0, 3.0);
+        let lift = ClampF(gravity + (wanted - velocity.Z) * 6.0, 0.0, 25.0);
+        this.Push(vehicle, position, 0.0, 0.0, mass * lift * elapsed);
+
+        let forward = vehicle.GetWorldForward();
+        let right = vehicle.GetWorldRight();
+
+        // Steering: opposed side pushes at the nose and tail.
+        let turn = mass * this.m_turn * 5.0 * elapsed;
+        let nose = new Vector4(position.X + forward.X * 2.0, position.Y + forward.Y * 2.0, position.Z, 1.0);
+        let tail = new Vector4(position.X - forward.X * 2.0, position.Y - forward.Y * 2.0, position.Z, 1.0);
+        this.Push(vehicle, nose, right.X * turn, right.Y * turn, 0.0);
+        this.Push(vehicle, tail, -right.X * turn, -right.Y * turn, 0.0);
+
+        // Travel where it points.
+        let slide = velocity.X * right.X + velocity.Y * right.Y;
+        let correct = -mass * ClampF(slide * 2.0, -12.0, 12.0) * elapsed;
+        let drive = mass * (WheelDriveTest_Throttle() * 8.0 - WheelDriveTest_Brake() * 8.0) * elapsed;
+        this.Push(vehicle, position, right.X * correct + forward.X * drive, right.Y * correct + forward.Y * drive, 0.0);
+
+        if now - this.m_hoverLogged >= 1.0 {
+            let yaw = vehicle.GetWorldYaw();
+            WheelDriveTest_Event(s"hover: height \(FloatToString(position.Z - this.m_hoverBase)), speed \(FloatToString(vehicle.GetCurrentSpeed())), turn \(FloatToString(this.m_turn)), yaw change \(FloatToString(yaw - this.m_hoverLastYaw))");
+            this.m_hoverLastYaw = yaw;
+            this.m_hoverLogged = now;
+        }
+    }
+
+    private func Push(vehicle: ref<VehicleObject>, at: Vector4, x: Float, y: Float, z: Float) {
+        let event = new PhysicalImpulseEvent();
+        event.radius = 1.0;
+        event.worldPosition = Vector4.Vector4To3(at);
+        event.worldImpulse = new Vector3(x, y, z);
+        vehicle.QueueEvent(event);
+    }
+
+    private func EndHover(reason: String, now: Float) {
+        if this.m_hovering {
+            this.m_hovering = false;
+            this.m_hoverEnd = now + 1.5;
+            WheelDriveTest_Event(s"hover: off, \(reason)");
+        }
     }
 
     private func EndBoost(reason: String) {
@@ -438,7 +542,8 @@ public class WheelDriveTestService extends ScriptableService {
 
     protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
         if Equals(ListenerAction.GetName(action), n"TurnX") {
-            WheelDriveTest_SteeringAction(ListenerAction.GetValue(action));
+            this.m_turn = ListenerAction.GetValue(action);
+            WheelDriveTest_SteeringAction(this.m_turn);
         }
     }
 

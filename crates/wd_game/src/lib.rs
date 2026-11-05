@@ -35,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 15, 0);
+    const VERSION: SemVer = SemVer::new(0, 16, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -66,6 +66,9 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_BoostPercent", boost_percent)),
             GlobalExport(global!(c"WheelDriveTest_BoostAdjust", boost_adjust)),
             GlobalExport(global!(c"WheelDriveTest_BoostWanted", boost_wanted)),
+            GlobalExport(global!(c"WheelDriveTest_HoverWanted", hover_wanted)),
+            GlobalExport(global!(c"WheelDriveTest_Throttle", throttle)),
+            GlobalExport(global!(c"WheelDriveTest_Brake", brake)),
             GlobalExport(global!(c"WheelDriveTest_SetAutopilot", set_autopilot)),
             GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
             GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
@@ -75,7 +78,7 @@ impl Plugin for LoadTest {
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.15.0".to_owned());
+        log_file::send("plugin loaded, version 0.16.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -292,6 +295,18 @@ fn boost_adjust(steps: i32) {
         Ok(()) => log_file::send(format!("boost strength saved: {moved}%")),
         Err(problem) => log_file::send(format!("boost strength not saved: {problem}")),
     }
+}
+
+fn hover_wanted() -> bool {
+    shared::hover_wanted()
+}
+
+fn throttle() -> f32 {
+    shared::pedal(0)
+}
+
+fn brake() -> f32 {
+    shared::pedal(1)
 }
 
 fn boost_wanted() -> bool {

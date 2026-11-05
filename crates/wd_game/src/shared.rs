@@ -3,7 +3,7 @@
 
 use crate::drive;
 use crate::latency::{Histogram, Summary};
-use crate::settings::{self, ROWS, SCRIPT_BOOST, SCRIPT_SHIFT};
+use crate::settings::{self, ROWS, SCRIPT_BOOST, SCRIPT_HOVER, SCRIPT_SHIFT};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
@@ -48,6 +48,9 @@ static SCRIPT_PENDING: AtomicU32 = AtomicU32::new(0);
 /// Whether the boost control counts right now, and whether the brake allows it.
 static BOOST_HELD: AtomicBool = AtomicBool::new(false);
 static BRAKE_CLEAR: AtomicBool = AtomicBool::new(true);
+static HOVER_HELD: AtomicBool = AtomicBool::new(false);
+/// The latest throttle and brake values sent to the game, 0 to 255.
+static PEDALS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
 /// True while the game's own driving is on, when the wheel must not steer or use the pedals.
 static AUTOPILOT: AtomicBool = AtomicBool::new(false);
 /// Functions the wheel has pressed since the last stats line.
@@ -231,6 +234,7 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
     };
     let flags = routes(counted);
     BOOST_HELD.store(flags & SCRIPT_BOOST != 0, Ordering::Relaxed);
+    HOVER_HELD.store(flags & SCRIPT_HOVER != 0, Ordering::Relaxed);
     if flags != 0 {
         FIRED.fetch_or(flags, Ordering::Relaxed);
     }
@@ -247,6 +251,20 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
 /// Whether boost should push the car now. Touching the brake ends it.
 pub fn boost_wanted() -> bool {
     BOOST_HELD.load(Ordering::Relaxed) && BRAKE_CLEAR.load(Ordering::Relaxed)
+}
+
+pub fn hover_wanted() -> bool {
+    HOVER_HELD.load(Ordering::Relaxed)
+}
+
+pub fn set_pedals(throttle: u8, brake: u8) {
+    PEDALS[0].store(u32::from(throttle), Ordering::Relaxed);
+    PEDALS[1].store(u32::from(brake), Ordering::Relaxed);
+}
+
+/// Throttle, then brake, from 0 to 1.
+pub fn pedal(index: usize) -> f32 {
+    PEDALS[index].load(Ordering::Relaxed) as f32 / 255.0
 }
 
 pub fn set_brake_clear(clear: bool) {

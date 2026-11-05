@@ -174,6 +174,24 @@ Plugin 0.15.0. `wd_game.dll` SHA-256 `9ad95869f492edb8696729027dced37f05f35b0e04
 
 Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Sixth build's game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. About 21 minutes, a clean shutdown and no new crash report.
+
+- **User report:** "boost seems to work well".
+- **Boost:** at 200%, the log shows peaks of about 61 and about 80, against a limit of 66 to 79, depending on the fastest speed seen.
+- **Menus:** the `IsInMenu` flag changed four times, so it follows the game's menus. The user made no further complaint about the map, without saying it was fixed.
+- **Autodrive:** still no autopilot change in the log, so this remains untested.
+- **Going back:** `wheel-back` was logged once and the menu closed again, as before.
+
+## Seventh build: hover test
+
+The decision is in `docs/decisions/D24-hover-test.md`. Plugin 0.16.0. `wd_game.dll` SHA-256 `b0d8a771c395ef350a4c2410160aa4c7ff2ec9098535f8d5ccdd15ffd2f98cd8`; `WheelDriveLoadTest.reds` SHA-256 `01319e86600f4b9e78d528941627df674c4a115929f987ed1aceee7382746722`. Staged in `out/hover-test/`. Not run in the game.
+
+It also wraps the pause menu scenario's own `OnBack`, as one more try at going back.
+
+Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-With the user's approval, install and test the map, boost at high strengths, and stability.
+With the user's approval, install and test hover. The user also confirms the map, Autodrive and camera controls.
