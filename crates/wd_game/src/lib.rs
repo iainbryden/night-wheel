@@ -35,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 10, 0);
+    const VERSION: SemVer = SemVer::new(0, 11, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -50,13 +50,20 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_ScreenClose", screen_close)),
             GlobalExport(global!(c"WheelDriveTest_ScreenCommand", screen_command)),
             GlobalExport(global!(c"WheelDriveTest_ScreenTick", screen_tick)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenRowCount", screen_row_count)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenRowLabel", screen_row_label)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenRowValue", screen_row_value)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenSelected", screen_selected)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenSelect", screen_select)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.10.0".to_owned());
+        log_file::send("plugin loaded, version 0.11.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -185,25 +192,68 @@ fn screen_command(code: i32) {
     }
 }
 
-/// Runs the screen for one refresh and returns its text, or nothing when it should close.
-fn screen_tick(steering: i32) -> String {
+/// Runs the screen for one refresh. False means it should close.
+fn screen_tick() -> bool {
     let mut screen = SCREEN.lock().unwrap_or_else(PoisonError::into_inner);
     let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
-    let Some(screen) = screen.as_mut() else {
-        return String::new();
-    };
-    let Some(config) = settings.as_mut() else {
-        return "NIGHT WHEEL\nNO CALIBRATION FILE, SO BINDING IS NOT AVAILABLE\nPERIOD CLOSES THIS"
-            .to_owned();
+    let (Some(screen), Some(config)) = (screen.as_mut(), settings.as_mut()) else {
+        return true;
     };
     let (held, pressed) = shared::controls_for_screen();
     if screen.wheel(shared::now_ms(), held, pressed, &mut config.bindings) {
         bindings_changed(config, screen);
     }
-    if screen.done() {
-        return String::new();
+    !screen.done()
+}
+
+fn screen_row_count() -> i32 {
+    settings::ROWS.len() as i32
+}
+
+fn screen_row_label(row: i32) -> String {
+    settings::Screen::row_label(usize::try_from(row).unwrap_or(usize::MAX))
+}
+
+/// Runs `read` with the screen and its settings, or gives the default when either is missing.
+fn with_screen<T: Default>(read: impl FnOnce(&settings::Screen, &Config) -> T) -> T {
+    let screen = SCREEN.lock().unwrap_or_else(PoisonError::into_inner);
+    let settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    match (screen.as_ref(), settings.as_ref()) {
+        (Some(screen), Some(config)) => read(screen, config),
+        _ => T::default(),
     }
-    screen.text(&config.bindings, steering, shared::steering_speed(), held)
+}
+
+fn screen_row_value(row: i32) -> String {
+    with_screen(|screen, config| {
+        screen.row_value(usize::try_from(row).unwrap_or(usize::MAX), &config.bindings)
+    })
+}
+
+fn screen_selected() -> i32 {
+    with_screen(|screen, _| screen.selected() as i32)
+}
+
+fn screen_select(row: i32) {
+    let mut screen = SCREEN.lock().unwrap_or_else(PoisonError::into_inner);
+    if let (Some(screen), Ok(row)) = (screen.as_mut(), usize::try_from(row)) {
+        screen.select(row);
+    }
+}
+
+fn screen_status() -> String {
+    if SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_none()
+    {
+        return "NO CALIBRATION FILE, SO BINDING IS NOT AVAILABLE".to_owned();
+    }
+    with_screen(|screen, config| screen.status(&config.bindings))
+}
+
+fn screen_hints() -> String {
+    with_screen(|screen, _| screen.hints().to_owned())
 }
 
 fn set_driving(driving: bool) {

@@ -131,16 +131,6 @@ fn sample_of(bits: u64) -> Sample {
     sample
 }
 
-/// Names what is held, for the screen.
-pub fn held_names(bits: u64) -> String {
-    let names: Vec<String> = held_controls(bits).into_iter().map(control_name).collect();
-    if names.is_empty() {
-        "NONE".to_owned()
-    } else {
-        names.join(" + ")
-    }
-}
-
 #[derive(Debug)]
 enum Mode {
     Browse,
@@ -267,46 +257,66 @@ impl Screen {
         self.message = message;
     }
 
-    /// The screen's text.
-    pub fn text(&self, bindings: &Bindings, steering: i32, speed: f32, held: u64) -> String {
-        let mut text = String::from("NIGHT WHEEL - WHEEL SETTINGS\n");
-        for (index, (action, _)) in ROWS.iter().enumerate() {
-            let marker = if index == self.selected { "> " } else { "   " };
-            let bound = bindings
-                .get(*action)
-                .map_or_else(|| "NOT BOUND".to_owned(), control_name);
-            let label = action.label().to_uppercase();
-            text.push_str(&format!("{marker}{label}: {bound}\n"));
+    /// Moves the selection to a row, as a mouse hover does. Ignored mid-bind.
+    pub fn select(&mut self, row: usize) {
+        if matches!(self.mode, Mode::Browse) && row < ROWS.len() && row != self.selected {
+            self.selected = row;
+            self.message.clear();
         }
-        text.push('\n');
+    }
+
+    pub fn selected(&self) -> usize {
+        self.selected
+    }
+
+    /// The function named on a row.
+    pub fn row_label(row: usize) -> String {
+        ROWS.get(row)
+            .map_or_else(String::new, |(action, _)| action.label().to_owned())
+    }
+
+    /// What a row's box shows.
+    pub fn row_value(&self, row: usize, bindings: &Bindings) -> String {
+        let Some((action, _)) = ROWS.get(row) else {
+            return String::new();
+        };
+        if row == self.selected {
+            match &self.mode {
+                Mode::Browse => {}
+                Mode::Listening(_) => return "PRESS A WHEEL CONTROL".to_owned(),
+                Mode::Confirm(control) => return format!("{}?", control_name(*control)),
+            }
+        }
+        bindings
+            .get(*action)
+            .map_or_else(|| "NOT BOUND".to_owned(), control_name)
+    }
+
+    /// The line above the hints.
+    pub fn status(&self, bindings: &Bindings) -> String {
         let label = self.action().label().to_uppercase();
         match &self.mode {
-            Mode::Browse => {
-                text.push_str(&format!(
-                    "HOLDING {}   STEERING {steering}   SPEED X{speed}\n",
-                    held_names(held)
-                ));
-                if !self.message.is_empty() {
-                    text.push_str(&format!("{}\n", self.message));
-                }
-                text.push_str("UP/DOWN OR D-PAD: SELECT   ENTER OR X: BIND\n");
-                text.push_str("DELETE OR SQUARE: CLEAR   PERIOD OR CIRCLE: CLOSE");
-            }
-            Mode::Listening(_) => {
-                text.push_str(&format!("PRESS A WHEEL CONTROL FOR {label}\n"));
-                text.push_str("PERIOD CANCELS");
-            }
+            Mode::Browse => self.message.clone(),
+            Mode::Listening(_) => format!("PRESS A WHEEL CONTROL FOR {label}"),
             Mode::Confirm(control) => {
                 let name = control_name(*control);
-                text.push_str(&format!("BIND {label} TO {name}?\n"));
+                let mut text = format!("BIND {label} TO {name}?");
                 for other in bindings.conflicts(self.action(), *control) {
                     let other = other.label().to_uppercase();
-                    text.push_str(&format!("THIS CLEARS {name} FROM {other}\n"));
+                    text.push_str(&format!("  THIS CLEARS {name} FROM {other}"));
                 }
-                text.push_str("ENTER OR X: CONFIRM   PERIOD OR CIRCLE: CANCEL");
+                text
             }
         }
-        text
+    }
+
+    /// The controls available now.
+    pub fn hints(&self) -> &'static str {
+        match self.mode {
+            Mode::Browse => "X / ENTER  BIND     SQUARE / DELETE  CLEAR     CIRCLE / PERIOD  BACK",
+            Mode::Listening(_) => "PERIOD  CANCEL",
+            Mode::Confirm(_) => "X / ENTER  CONFIRM     CIRCLE / PERIOD  CANCEL",
+        }
     }
 }
 
@@ -322,6 +332,34 @@ mod tests {
             page: BUTTON_PAGE,
             usage,
         })
+    }
+
+    #[test]
+    fn a_row_shows_its_binding_or_what_is_happening() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        assert_eq!(screen.row_value(0, &bindings), "NOT BOUND");
+        bindings.assign(Action::Horn, usage(6));
+        assert_eq!(screen.row_value(1, &bindings), "LEFT PADDLE");
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        assert_eq!(screen.row_value(0, &bindings), "PRESS A WHEEL CONTROL");
+        assert_eq!(screen.row_value(1, &bindings), "LEFT PADDLE");
+        screen.wheel(10, 1 << 6, 1 << 6, &mut bindings);
+        assert_eq!(screen.row_value(0, &bindings), "R2?");
+        assert_eq!(screen.row_value(99, &bindings), "");
+    }
+
+    #[test]
+    fn hovering_selects_except_during_a_bind() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.select(3);
+        assert_eq!(screen.selected(), 3);
+        screen.select(99);
+        assert_eq!(screen.selected(), 3);
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        screen.select(1);
+        assert_eq!(screen.selected(), 3);
     }
 
     #[test]
@@ -403,7 +441,7 @@ mod tests {
         bindings.assign(Action::Horn, usage(6));
         screen.command(Command::Select, 0, 0, &mut bindings);
         screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
-        let text = screen.text(&bindings, 0, 2.0, 0);
+        let text = screen.status(&bindings);
         assert!(text.contains("THIS CLEARS LEFT PADDLE FROM HORN"), "{text}");
         screen.command(Command::Select, 20, 0, &mut bindings);
         assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
@@ -450,13 +488,5 @@ mod tests {
         assert_eq!(control_name(usage(11)), "R3");
         assert_eq!(control_name(usage(13)), "BUTTON 13");
         assert_eq!(control_name(Control::Hat(4)), "D-PAD DOWN");
-    }
-
-    #[test]
-    fn held_names_list_every_control() {
-        assert_eq!(held_names(0), "NONE");
-        assert_eq!(held_names(1), "X");
-        let diagonal = (HAT_UP | HAT_RIGHT) << HAT_SHIFT;
-        assert_eq!(held_names(diagonal), "D-PAD UP + D-PAD RIGHT");
     }
 }

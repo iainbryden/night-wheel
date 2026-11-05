@@ -54,6 +54,27 @@ Shifting, boost, profiles and the rest are left off the screen until they work.
 - Right shoulder also fires in driver combat and with mounted weapons, per the game's mappings, so the Radio binding may do something else in those states. Lights and camera share their gamepad buttons with other contexts in the same way.
 - L3's name rests on elimination. The steering part of calibration isn't on this screen yet.
 
+## Game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked, with `profile.cfg` copied to `out/game-before/profile-before-bind.cfg`. The test stopped early because of the screen. The game was still open when the log was read, so shutdown is not covered.
+
+- **User report:** navigating the screen was poor. The wheel's D-pad also moved the pause menu's left column. The user asked for it to follow the game's Key Bindings page.
+- **Log:** binding and saving worked from the screen. `profile.cfg` holds `horn = button 1` (X) from this run. The functions were not reported tested in a car.
+- **Unexplained:** the plugin passes no wheel buttons to the game during pause, so the D-pad reached the menu some other way. The game's executable declares HID, and G HUB or Steam Input are also candidates. Not investigated further. Earlier reports of wheel presses and key events did not settle it.
+- The script's small test line also appeared over the game's Settings pages.
+
+## Second build: full page
+
+Plugin 0.11.0. `wd_game.dll` SHA-256 `9935fa037607cc546a08054595fe2f95c039a650c618adcad5c404dbb96b2590`; `WheelDriveLoadTest.reds` SHA-256 `9fc03fa15d534ce3ec5e672fcb58a9730fb414314982be7036f149007cca66e4`. Staged in `out/page-test/`. Not run in the game.
+
+- **Layout.** A full opaque page with a heading and rows that have a label on the left and a framed value on the right, following the arrangement of the game's Key Bindings page. Original widgets only, with no game or mod layout files reused. The small test line is now blank.
+- **Pause menu.** Hidden while the page is open, and its entries still do nothing.
+- **Mouse.** Hover selects a row and a click starts Bind. Whether this layer receives pointer events is unproven, and the log records `wheel-row-clicked`.
+- **Back.** Escape still leaves the pause menu entirely. On first opening, the script logs the pause menu's function names through Codeware's reflection, to look for a way to handle going back.
+- **Font.** Row text uses a font path that isn't proven. If it doesn't load, the text may be blank or use a default, while the heading and hints use the proven font.
+
+Checks: lints clean, 138 of 138 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-With the user's approval, install and test binding, each function in a car, saving across a restart, and no replay on resume.
+With the user's approval and the game closed, install the second build. Then test the page, binding, each function in a car, saving across a restart, and no replay on resume.

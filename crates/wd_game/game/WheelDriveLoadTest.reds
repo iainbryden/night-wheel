@@ -3,7 +3,8 @@
 // every vehicle drive model, by an amount the plugin supplies. Nothing is saved.
 // During pause, it tests one way into a settings screen: a WHEEL SETTINGS entry in the pause menu,
 // with the period key as a fallback. The plugin runs the screen, and this script passes it keys and
-// shows its text. While the screen is open, the pause menu's entries do nothing.
+// draws a full page, laid out like the game's Key Bindings page. While that page is open the pause
+// menu is hidden and its entries do nothing.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -15,7 +16,14 @@ native func WheelDriveTest_SteeringSpeed() -> Float;
 native func WheelDriveTest_ScreenOpen();
 native func WheelDriveTest_ScreenClose();
 native func WheelDriveTest_ScreenCommand(code: Int32);
-native func WheelDriveTest_ScreenTick(steering: Int32) -> String;
+native func WheelDriveTest_ScreenTick() -> Bool;
+native func WheelDriveTest_ScreenRowCount() -> Int32;
+native func WheelDriveTest_ScreenRowLabel(row: Int32) -> String;
+native func WheelDriveTest_ScreenRowValue(row: Int32) -> String;
+native func WheelDriveTest_ScreenSelected() -> Int32;
+native func WheelDriveTest_ScreenSelect(row: Int32);
+native func WheelDriveTest_ScreenStatus() -> String;
+native func WheelDriveTest_ScreenHints() -> String;
 
 public class WheelDriveStartupRates extends ScriptableTweak {
     protected cb func OnApply() -> Void {
@@ -51,6 +59,10 @@ private func PopulateMenuItemList() -> Void {
     this.AddMenuItem(WheelDriveTestService.EntryLabel(), n"OnWheelDriveOpen");
     this.m_menuListController.Refresh();
     WheelDriveTest_Event("wheel-entry-added");
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) {
+        service.SetMenuRoot(this.GetRootWidget());
+    }
 }
 
 @wrapMethod(PauseMenuGameController)
@@ -91,7 +103,12 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_hint: ref<inkText>;
     private let m_refresh: ref<inkAnimProxy>;
     private let m_screen: ref<inkCanvas>;
-    private let m_screenText: ref<inkText>;
+    private let m_menuRoot: wref<inkWidget>;
+    private let m_rowValues: array<ref<inkText>>;
+    private let m_rowMarks: array<ref<inkRectangle>>;
+    private let m_status: ref<inkText>;
+    private let m_hints: ref<inkText>;
+    private let m_listedMenuFunctions: Bool;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -257,7 +274,7 @@ public class WheelDriveTestService extends ScriptableService {
         hint.SetAnchor(inkEAnchor.TopCenter);
         hint.SetAnchorPoint(0.5, 0.0);
         hint.SetMargin(new inkMargin(0.0, 40.0, 0.0, 0.0));
-        hint.SetText("NIGHT WHEEL TEST");
+        hint.SetText("");
         hint.Reparent(layer.GetVirtualWindow());
         this.m_hint = hint;
         this.StartRefresh();
@@ -292,6 +309,42 @@ public class WheelDriveTestService extends ScriptableService {
         return IsDefined(this.m_screen);
     }
 
+    public func SetMenuRoot(root: ref<inkWidget>) {
+        this.m_menuRoot = root;
+    }
+
+    private func Red() -> HDRColor {
+        return new HDRColor(1.1761, 0.3809, 0.3476, 1.0);
+    }
+
+    private func Teal() -> HDRColor {
+        return new HDRColor(0.3686, 0.9647, 1.0, 1.0);
+    }
+
+    private func AddRect(parent: ref<inkCanvas>, x: Float, y: Float, w: Float, h: Float, color: HDRColor) -> ref<inkRectangle> {
+        let rect = new inkRectangle();
+        rect.SetAnchor(inkEAnchor.TopLeft);
+        rect.SetMargin(new inkMargin(x, y, 0.0, 0.0));
+        rect.SetSize(new Vector2(w, h));
+        rect.SetTintColor(color);
+        rect.Reparent(parent);
+        return rect;
+    }
+
+    private func AddText(parent: ref<inkCanvas>, font: String, size: Int32, x: Float, y: Float, w: Float, h: Float, color: HDRColor, centered: Bool) -> ref<inkText> {
+        let text = new inkText();
+        text.SetFontFamily(font);
+        text.SetFontSize(size);
+        text.SetTintColor(color);
+        text.SetAnchor(inkEAnchor.TopLeft);
+        text.SetMargin(new inkMargin(x, y, 0.0, 0.0));
+        text.SetSize(new Vector2(w, h));
+        text.SetHorizontalAlignment(centered ? textHorizontalAlignment.Center : textHorizontalAlignment.Left);
+        text.SetVerticalAlignment(textVerticalAlignment.Center);
+        text.Reparent(parent);
+        return text;
+    }
+
     public func OpenScreen() {
         if IsDefined(this.m_screen) {
             return;
@@ -301,27 +354,95 @@ public class WheelDriveTestService extends ScriptableService {
             WheelDriveTest_Event("menu-layer-missing");
             return;
         }
-        let canvas = new inkCanvas();
-        canvas.SetAnchor(inkEAnchor.Fill);
-        canvas.Reparent(layer.GetVirtualWindow());
+        WheelDriveTest_ScreenOpen();
+        this.ListMenuFunctions();
+
+        let body = "base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily";
+        let heading = "base\\gameplay\\gui\\fonts\\orbitron\\orbitron.inkfontfamily";
+
+        let page = new inkCanvas();
+        page.SetAnchor(inkEAnchor.Fill);
+        page.Reparent(layer.GetVirtualWindow());
 
         let back = new inkRectangle();
-        back.SetAnchor(inkEAnchor.Centered);
-        back.SetAnchorPoint(0.5, 0.5);
-        back.SetSize(new Vector2(1500.0, 860.0));
-        back.SetTintColor(new HDRColor(0.03, 0.03, 0.05, 1.0));
-        back.Reparent(canvas);
+        back.SetAnchor(inkEAnchor.Fill);
+        back.SetTintColor(new HDRColor(0.03, 0.01, 0.02, 1.0));
+        back.Reparent(page);
 
-        let text = this.NewText(36);
-        text.SetAnchor(inkEAnchor.Centered);
-        text.SetAnchorPoint(0.5, 0.5);
-        text.Reparent(canvas);
+        let content = new inkCanvas();
+        content.SetAnchor(inkEAnchor.TopCenter);
+        content.SetAnchorPoint(0.5, 0.0);
+        content.SetSize(new Vector2(2000.0, 1400.0));
+        content.SetMargin(new inkMargin(0.0, 60.0, 0.0, 0.0));
+        content.Reparent(page);
 
-        this.m_screen = canvas;
-        this.m_screenText = text;
-        WheelDriveTest_ScreenOpen();
+        this.AddText(content, heading, 56, 0.0, 0.0, 2000.0, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
+        this.AddRect(content, 0.0, 130.0, 2000.0, 3.0, this.Teal());
+        this.AddText(content, body, 42, 20.0, 140.0, 1000.0, 70.0, new HDRColor(0.85, 0.85, 0.85, 1.0), false).SetText("Driving");
+
+        ArrayClear(this.m_rowValues);
+        ArrayClear(this.m_rowMarks);
+        let count = WheelDriveTest_ScreenRowCount();
+        let row = 0;
+        while row < count {
+            let y = 220.0 + Cast<Float>(row) * 100.0;
+            let mark = this.AddRect(content, 0.0, y, 2000.0, 90.0, this.Red());
+            mark.SetOpacity(0.03);
+            mark.SetName(StringToName(IntToString(row)));
+            mark.SetInteractive(true);
+            mark.RegisterToCallback(n"OnRelease", this, n"OnRowRelease");
+            mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
+            ArrayPush(this.m_rowMarks, mark);
+
+            this.AddText(content, body, 42, 30.0, y, 1000.0, 90.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
+
+            let boxX = 1050.0;
+            let boxW = 900.0;
+            this.AddRect(content, boxX, y + 8.0, boxW, 2.0, this.Red());
+            this.AddRect(content, boxX, y + 80.0, boxW, 2.0, this.Red());
+            this.AddRect(content, boxX, y + 8.0, 2.0, 74.0, this.Red());
+            this.AddRect(content, boxX + boxW - 2.0, y + 8.0, 2.0, 74.0, this.Red());
+            ArrayPush(this.m_rowValues, this.AddText(content, body, 40, boxX, y, boxW, 90.0, this.Teal(), true));
+            row += 1;
+        }
+
+        let bottom = 220.0 + Cast<Float>(count) * 100.0;
+        this.m_status = this.AddText(content, heading, 34, 0.0, bottom + 20.0, 2000.0, 70.0, this.Teal(), true);
+        this.m_hints = this.AddText(content, heading, 30, 0.0, bottom + 100.0, 2000.0, 60.0, this.Red(), true);
+
+        this.m_screen = page;
+        if IsDefined(this.m_menuRoot) {
+            this.m_menuRoot.SetVisible(false);
+        }
         this.UpdateScreen();
         WheelDriveTest_Event("wheel-screen-open");
+    }
+
+    // Logged once, to help find how the pause menu handles going back.
+    private func ListMenuFunctions() {
+        if this.m_listedMenuFunctions {
+            return;
+        }
+        this.m_listedMenuFunctions = true;
+        let cls = Reflection.GetClass(n"PauseMenuGameController");
+        while IsDefined(cls) {
+            for func in cls.GetFunctions() {
+                WheelDriveTest_Event(s"menu-function: \(NameToString(cls.GetName())).\(NameToString(func.GetName()))");
+            }
+            cls = cls.GetParent();
+        }
+    }
+
+    protected cb func OnRowHover(event: ref<inkPointerEvent>) -> Bool {
+        WheelDriveTest_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
+    }
+
+    protected cb func OnRowRelease(event: ref<inkPointerEvent>) -> Bool {
+        if event.IsAction(n"click") {
+            WheelDriveTest_Event("wheel-row-clicked");
+            WheelDriveTest_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
+            WheelDriveTest_ScreenCommand(3);
+        }
     }
 
     private func HideScreen() {
@@ -334,7 +455,13 @@ public class WheelDriveTestService extends ScriptableService {
                 this.m_screen.SetVisible(false);
             }
             this.m_screen = null;
-            this.m_screenText = null;
+            this.m_status = null;
+            this.m_hints = null;
+            ArrayClear(this.m_rowValues);
+            ArrayClear(this.m_rowMarks);
+            if IsDefined(this.m_menuRoot) {
+                this.m_menuRoot.SetVisible(true);
+            }
             WheelDriveTest_Event("wheel-screen-closed");
         }
     }
@@ -352,13 +479,21 @@ public class WheelDriveTestService extends ScriptableService {
     }
 
     private func UpdateScreen() {
-        if IsDefined(this.m_screenText) {
-            let text = WheelDriveTest_ScreenTick(this.m_steering);
-            if StrLen(text) == 0 {
-                this.HideScreen();
-            } else {
-                this.m_screenText.SetText(text);
-            }
+        if !IsDefined(this.m_screen) {
+            return;
         }
+        if !WheelDriveTest_ScreenTick() {
+            this.HideScreen();
+            return;
+        }
+        let selected = WheelDriveTest_ScreenSelected();
+        let row = 0;
+        while row < ArraySize(this.m_rowValues) {
+            this.m_rowValues[row].SetText(WheelDriveTest_ScreenRowValue(row));
+            this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
+            row += 1;
+        }
+        this.m_status.SetText(WheelDriveTest_ScreenStatus());
+        this.m_hints.SetText(WheelDriveTest_ScreenHints());
     }
 }
