@@ -139,8 +139,8 @@ pub fn record_applied(thumb: i16) {
     }
 }
 
-/// Most response samples logged per launch, which is a few minutes of driving.
-const MAX_SAMPLES: u32 = 15_000;
+/// Most response samples logged per launch, which is about an hour of driving.
+const MAX_SAMPLES: u32 = 200_000;
 static SAMPLES: AtomicU32 = AtomicU32::new(0);
 
 fn format_sample(time_us: u64, stick: i32, turn: f32, yaw: f32, speed: f32) -> String {

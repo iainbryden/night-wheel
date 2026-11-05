@@ -2,8 +2,8 @@
 // only apply then. During pause it shows the live wheel value and a value the comma and period
 // keys change. On first driving it reports the vehicle's steering settings, using read-only
 // getters and property reads, and it passes the game's steering action to the plugin.
-// For comparison, the comma and period keys choose a steering speed level during pause. The level
-// multiplies four steering speed values in memory, for this game session only, on resume.
+// For one test only, four steering speed values are multiplied in memory when the game starts,
+// for every vehicle drive model, so that no car can exist with the old values. Nothing is saved.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -12,6 +12,32 @@ native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
 native func WheelDriveTest_SteeringAction(value: Float);
 native func WheelDriveTest_Sample(turn: Float, yaw: Float, speed: Float);
+
+public class WheelDriveStartupRates extends ScriptableTweak {
+    protected cb func OnApply() -> Void {
+        let names: array<String>;
+        ArrayPush(names, ".turnUpdateInputFastChangeSpeed");
+        ArrayPush(names, ".turnUpdateInputSlowChangeSpeed");
+        ArrayPush(names, ".wheelTurnMaxAddPerSecond");
+        ArrayPush(names, ".wheelTurnMaxSubPerSecond");
+
+        let records = TweakDBInterface.GetRecords(n"VehicleDriveModelData");
+        let changed = 0;
+        for record in records {
+            let base = record.GetID();
+            for name in names {
+                let id = base;
+                TDBID.Append(id, TDBID.Create(name));
+                let value = TweakDBInterface.GetFloat(id, -1.0);
+                if value > 0.0 && TweakDBManager.SetFlat(id, value * 10.0) {
+                    changed += 1;
+                }
+            }
+            TweakDBManager.UpdateRecord(base);
+        }
+        WheelDriveTest_Event(s"startup rates: \(ArraySize(records)) drive models, \(changed) values multiplied by 10");
+    }
+}
 
 public class WheelDriveTestTick extends DelayCallback {
     public let service: wref<WheelDriveTestService>;
@@ -70,7 +96,6 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_paused = false;
         WheelDriveTest_Event("session-resume");
         this.HideText();
-        this.ApplyLevel();
     }
 
     private cb func OnSessionEnd(event: ref<GameSessionEvent>) {
@@ -131,8 +156,6 @@ public class WheelDriveTestService extends ScriptableService {
             if driving {
                 this.StartListening(player);
                 this.ReportVehicle(player);
-                this.FindDriveModel(player);
-                this.ApplyLevel();
                 this.ReportRates(player);
             }
         }
@@ -397,7 +420,7 @@ public class WheelDriveTestService extends ScriptableService {
 
     private func UpdateText() {
         if IsDefined(this.m_text) {
-            this.m_text.SetText(s"WHEEL TEST  X \(this.m_steering)  STEERING SPEED LEVEL \(this.m_testValue) (COMMA/PERIOD)");
+            this.m_text.SetText(s"WHEEL TEST  X \(this.m_steering)  STEERING SPEED X10 FROM GAME START");
         }
     }
 }
