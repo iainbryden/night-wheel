@@ -3,7 +3,7 @@
 
 use crate::drive;
 use crate::latency::{Histogram, Summary};
-use crate::settings::ROWS;
+use crate::settings::{self, ROWS};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
@@ -41,6 +41,8 @@ static PRESSED_FOR_POLL: AtomicU64 = AtomicU64::new(0);
 static PRESSED_FOR_SCREEN: AtomicU64 = AtomicU64::new(0);
 /// Controls that must be released before they count again.
 static WAITING: AtomicU64 = AtomicU64::new(0);
+/// Gamepad buttons the wheel has pressed since the last stats line.
+static FIRED: AtomicU32 = AtomicU32::new(0);
 /// The control bit bound to each settings row, or zero.
 static ROW_BITS: [AtomicU64; ROWS.len()] = [const { AtomicU64::new(0) }; ROWS.len()];
 /// The steering speed multiplier for this launch, set once before the game asks for it.
@@ -209,13 +211,17 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
     let waiting = WAITING.load(Ordering::Relaxed);
     let (counted, waiting) = drive::gate_controls(held, pressed, waiting, may_apply);
     WAITING.store(waiting, Ordering::Relaxed);
-    drive::pad_flags(
+    let flags = drive::pad_flags(
         counted,
         ROW_BITS
             .iter()
             .zip(ROWS)
             .map(|(bit, (_, flag))| (bit.load(Ordering::Relaxed), flag)),
-    )
+    );
+    if flags != 0 {
+        FIRED.fetch_or(u32::from(flags), Ordering::Relaxed);
+    }
+    flags
 }
 
 /// Publishes bindings to the game's poll.
@@ -281,10 +287,11 @@ pub fn stats_line() -> Option<String> {
         return None;
     }
     Some(format!(
-        "stats paused={} driving={} connected={} reports={reports} keys={keys} applied={applied} {} {} {} {} {} {}",
+        "stats paused={} driving={} connected={} reports={reports} keys={keys} applied={applied} fired={} {} {} {} {} {} {}",
         PAUSED.load(Ordering::Relaxed),
         DRIVING.load(Ordering::Relaxed),
         WHEEL_CONNECTED.load(Ordering::Relaxed),
+        settings::fired_names(FIRED.swap(0, Ordering::Relaxed) as u16),
         format_summary("decode", decode),
         format_summary("read_interval", interval),
         format_summary("value_age", age),

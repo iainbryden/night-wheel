@@ -4,7 +4,7 @@
 // During pause, it tests one way into a settings screen: a WHEEL SETTINGS entry in the pause menu,
 // with the period key as a fallback. The plugin runs the screen, and this script passes it keys and
 // draws a full page, laid out like the game's Key Bindings page. While that page is open the pause
-// menu is hidden and its entries do nothing.
+// menu is hidden and its entries do nothing, and going back returns to the pause menu.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -22,6 +22,7 @@ native func WheelDriveTest_ScreenRowLabel(row: Int32) -> String;
 native func WheelDriveTest_ScreenRowValue(row: Int32) -> String;
 native func WheelDriveTest_ScreenSelected() -> Int32;
 native func WheelDriveTest_ScreenSelect(row: Int32);
+native func WheelDriveTest_ScreenRowLit(row: Int32) -> Bool;
 native func WheelDriveTest_ScreenStatus() -> String;
 native func WheelDriveTest_ScreenHints() -> String;
 
@@ -82,6 +83,18 @@ protected cb func OnMenuItemActivated(index: Int32, target: ref<ListItemControll
         return true;
     }
     return wrappedMethod(index, target);
+}
+
+// Going back cancels a bind or leaves the page, in place of closing the pause menu.
+@wrapMethod(PauseMenuGameController)
+protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) && service.IsScreenOpen() && e.IsAction(n"back") {
+        WheelDriveTest_Event("wheel-back");
+        WheelDriveTest_ScreenCommand(5);
+        return true;
+    }
+    return wrappedMethod(e);
 }
 
 public class WheelDriveTestTick extends DelayCallback {
@@ -490,7 +503,11 @@ public class WheelDriveTestService extends ScriptableService {
         let row = 0;
         while row < ArraySize(this.m_rowValues) {
             this.m_rowValues[row].SetText(WheelDriveTest_ScreenRowValue(row));
-            this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
+            if WheelDriveTest_ScreenRowLit(row) {
+                this.m_rowMarks[row].SetOpacity(0.7);
+            } else {
+                this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
+            }
             row += 1;
         }
         this.m_status.SetText(WheelDriveTest_ScreenStatus());

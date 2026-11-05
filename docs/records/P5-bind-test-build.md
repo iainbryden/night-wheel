@@ -91,6 +91,20 @@ Conflicts visible in the design, whether or not they are what the user saw:
 - The route by which the wheel's D-pad reached the pause menu is still unknown.
 - Nothing logs which gamepad buttons were pressed in a car, so a conflict there can't be shown from this log.
 
+The game was then closed. The plugin unloaded and no new crash report was written.
+
+## Third build: one press to bind
+
+The decision is in `docs/decisions/D22-settings-page-input.md`. Plugin 0.12.0. `wd_game.dll` SHA-256 `4c77f2ebdbd914118d8c475f64d5cf980e3f5f3d4bfdf6a7b03cf7fe9291b1f2`; `WheelDriveLoadTest.reds` SHA-256 `131606555b693adb1f5de6e30aee432e599bee1cd931498914aa1aec263a25e8`. Staged in `out/oneclick-test/`. Not run in the game.
+
+- One press sets a binding, and a control already in use moves.
+- The wheel no longer runs the page.
+- The game's `back` action cancels a bind or leaves the page, through a wrap of `OnGlobalRelease`.
+- Pressing a bound control lights its row for a moment.
+- Each stats line now has `fired=`, naming the functions the wheel pressed in that second, so conflicts in a car can be read from the log. Hot-path cost is one atomic write, only when something is pressed.
+
+Checks: lints clean, 141 of 141 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-Put a redesign to the user: one press to bind with no confirmation, mouse and keyboard to run the page, and Escape to go back.
+With the user's approval, install. Then test the page, each function in a car, saving across a restart, and no replay on resume.

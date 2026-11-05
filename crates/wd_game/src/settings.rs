@@ -1,6 +1,7 @@
-//! The in-game settings screen: choosing a function and binding a wheel control to it. Free of
-//! Windows and game types so it can be tested without either. It runs only while the screen is
-//! open, and never on the steering path.
+//! The in-game settings screen: choosing a function and binding a wheel control to it. The mouse
+//! and keyboard run the screen, and the wheel is only used to choose a control, so no wheel button
+//! ever has two jobs. Free of Windows and game types so it can be tested without either. It runs
+//! only while the screen is open, and never on the steering path.
 
 use crate::drive::{HAT_DOWN, HAT_LEFT, HAT_RIGHT, HAT_SHIFT, HAT_UP, bit_for};
 use std::collections::BTreeSet;
@@ -33,14 +34,10 @@ pub const ROWS: [(Action, u16); 8] = [
     (Action::CombatMode, PAD_Y),
 ];
 
-// Screen controls on the wheel. See docs/records/P1-control-map.md.
-const WHEEL_UP: u64 = HAT_UP << HAT_SHIFT;
-const WHEEL_DOWN: u64 = HAT_DOWN << HAT_SHIFT;
-const WHEEL_SELECT: u64 = 1 << 0; // X
-const WHEEL_CLEAR: u64 = 1 << 1; // Square
-const WHEEL_CLOSE: u64 = 1 << 2; // Circle
+/// How long a row stays lit after its control is pressed, so a dial click can be seen.
+const LIT_MS: u64 = 300;
 
-/// A request from the keyboard or the wheel.
+/// A request from the keyboard or mouse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Up,
@@ -51,7 +48,7 @@ pub enum Command {
 }
 
 impl Command {
-    /// The number the game script uses for each key.
+    /// The number the game script uses for each request.
     pub fn from_code(code: i32) -> Option<Self> {
         match code {
             1 => Some(Self::Up),
@@ -61,6 +58,20 @@ impl Command {
             5 => Some(Self::Close),
             _ => None,
         }
+    }
+}
+
+/// The saved names of the functions whose gamepad buttons are in `flags`, for the log.
+pub fn fired_names(flags: u16) -> String {
+    let names: Vec<&str> = ROWS
+        .iter()
+        .filter(|(_, flag)| flags & flag != 0)
+        .map(|(action, _)| action.key())
+        .collect();
+    if names.is_empty() {
+        "none".to_owned()
+    } else {
+        names.join(",")
     }
 }
 
@@ -135,7 +146,6 @@ fn sample_of(bits: u64) -> Sample {
 enum Mode {
     Browse,
     Listening(ButtonListener),
-    Confirm(Control),
 }
 
 /// What the screen is doing.
@@ -145,6 +155,7 @@ pub struct Screen {
     mode: Mode,
     message: String,
     done: bool,
+    lit_until: [u64; ROWS.len()],
 }
 
 impl Screen {
@@ -154,6 +165,7 @@ impl Screen {
             mode: Mode::Browse,
             message: String::new(),
             done: false,
+            lit_until: [0; ROWS.len()],
         }
     }
 
@@ -164,6 +176,10 @@ impl Screen {
 
     fn action(&self) -> Action {
         ROWS[self.selected].0
+    }
+
+    fn label(action: Action) -> String {
+        action.label().to_uppercase()
     }
 
     /// Acts on a request. Returns true when `bindings` changed.
@@ -198,22 +214,16 @@ impl Screen {
             (Mode::Browse, Command::Clear) => {
                 let had_one = bindings.get(self.action()).is_some();
                 bindings.clear(self.action());
+                if had_one {
+                    self.message = format!("{} CLEARED", Self::label(self.action()));
+                }
                 had_one
             }
             (Mode::Browse, Command::Close) => {
                 self.done = true;
                 false
             }
-            (Mode::Confirm(control), Command::Select) => {
-                let control = *control;
-                for other in bindings.conflicts(self.action(), control) {
-                    bindings.clear(other);
-                }
-                bindings.assign(self.action(), control);
-                self.mode = Mode::Browse;
-                true
-            }
-            (_, Command::Close) => {
+            (Mode::Listening(_), Command::Close) => {
                 self.mode = Mode::Browse;
                 self.message = "CANCELLED".to_owned();
                 false
@@ -224,33 +234,44 @@ impl Screen {
 
     /// Takes the wheel's state: `held` now, and `pressed` for anything pressed since the last call,
     /// including a press too short to still be held. Returns true when `bindings` changed.
+    /// While listening, one fresh press sets the binding. Otherwise, pressing lights its row.
     pub fn wheel(&mut self, now_ms: u64, held: u64, pressed: u64, bindings: &mut Bindings) -> bool {
         if let Mode::Listening(listener) = &mut self.mode {
             let sample = sample_of(held | pressed);
-            match listener.update(now_ms, Some(&sample)) {
-                ListenOutcome::Waiting => {}
-                ListenOutcome::Detected(control) => self.mode = Mode::Confirm(control),
+            return match listener.update(now_ms, Some(&sample)) {
+                ListenOutcome::Waiting => false,
+                ListenOutcome::Detected(control) => {
+                    self.bind(control, bindings);
+                    true
+                }
                 ListenOutcome::TimedOut => {
                     self.mode = Mode::Browse;
                     self.message = "NO PRESS DETECTED".to_owned();
+                    false
                 }
-            }
-            return false;
+            };
         }
-        let command = if pressed & WHEEL_SELECT != 0 {
-            Command::Select
-        } else if pressed & WHEEL_CLOSE != 0 {
-            Command::Close
-        } else if pressed & WHEEL_CLEAR != 0 {
-            Command::Clear
-        } else if pressed & WHEEL_UP != 0 {
-            Command::Up
-        } else if pressed & WHEEL_DOWN != 0 {
-            Command::Down
-        } else {
-            return false;
-        };
-        self.command(command, now_ms, held, bindings)
+        for (row, (action, _)) in ROWS.iter().enumerate() {
+            let bit = bindings.get(*action).and_then(bit_for).unwrap_or(0);
+            if bit & (held | pressed) != 0 {
+                self.lit_until[row] = now_ms + LIT_MS;
+            }
+        }
+        false
+    }
+
+    /// Sets the selected function's control, taking it from any function that had it.
+    fn bind(&mut self, control: Control, bindings: &mut Bindings) {
+        let action = self.action();
+        let name = control_name(control);
+        self.message = format!("{} SET TO {name}", Self::label(action));
+        for other in bindings.conflicts(action, control) {
+            bindings.clear(other);
+            self.message
+                .push_str(&format!(", REMOVED FROM {}", Self::label(other)));
+        }
+        bindings.assign(action, control);
+        self.mode = Mode::Browse;
     }
 
     pub fn set_message(&mut self, message: String) {
@@ -269,6 +290,11 @@ impl Screen {
         self.selected
     }
 
+    /// True while a row's control has just been pressed.
+    pub fn row_lit(&self, row: usize, now_ms: u64) -> bool {
+        self.lit_until.get(row).is_some_and(|until| now_ms < *until)
+    }
+
     /// The function named on a row.
     pub fn row_label(row: usize) -> String {
         ROWS.get(row)
@@ -280,12 +306,8 @@ impl Screen {
         let Some((action, _)) = ROWS.get(row) else {
             return String::new();
         };
-        if row == self.selected {
-            match &self.mode {
-                Mode::Browse => {}
-                Mode::Listening(_) => return "PRESS A WHEEL CONTROL".to_owned(),
-                Mode::Confirm(control) => return format!("{}?", control_name(*control)),
-            }
+        if row == self.selected && matches!(self.mode, Mode::Listening(_)) {
+            return "PRESS A WHEEL CONTROL".to_owned();
         }
         bindings
             .get(*action)
@@ -293,19 +315,11 @@ impl Screen {
     }
 
     /// The line above the hints.
-    pub fn status(&self, bindings: &Bindings) -> String {
-        let label = self.action().label().to_uppercase();
+    pub fn status(&self) -> String {
         match &self.mode {
             Mode::Browse => self.message.clone(),
-            Mode::Listening(_) => format!("PRESS A WHEEL CONTROL FOR {label}"),
-            Mode::Confirm(control) => {
-                let name = control_name(*control);
-                let mut text = format!("BIND {label} TO {name}?");
-                for other in bindings.conflicts(self.action(), *control) {
-                    let other = other.label().to_uppercase();
-                    text.push_str(&format!("  THIS CLEARS {name} FROM {other}"));
-                }
-                text
+            Mode::Listening(_) => {
+                format!("PRESS A WHEEL CONTROL FOR {}", Self::label(self.action()))
             }
         }
     }
@@ -313,9 +327,8 @@ impl Screen {
     /// The controls available now.
     pub fn hints(&self) -> &'static str {
         match self.mode {
-            Mode::Browse => "X / ENTER  BIND     SQUARE / DELETE  CLEAR     CIRCLE / PERIOD  BACK",
-            Mode::Listening(_) => "PERIOD  CANCEL",
-            Mode::Confirm(_) => "X / ENTER  CONFIRM     CIRCLE / PERIOD  CANCEL",
+            Mode::Browse => "CLICK OR ENTER  BIND     DELETE  CLEAR     ESC  BACK",
+            Mode::Listening(_) => "ESC  CANCEL",
         }
     }
 }
@@ -323,9 +336,11 @@ impl Screen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::drive::HAT_SHIFT;
 
     const LEFT_PADDLE: u64 = 1 << 5;
     const DIAL: u64 = 1 << 21;
+    const WHEEL_X: u64 = 1;
 
     fn usage(usage: u16) -> Control {
         Control::Button(ButtonId {
@@ -335,7 +350,139 @@ mod tests {
     }
 
     #[test]
-    fn a_row_shows_its_binding_or_what_is_happening() {
+    fn selection_moves_and_wraps() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Up, 0, 0, &mut bindings);
+        assert_eq!(screen.selected(), ROWS.len() - 1);
+        screen.command(Command::Down, 0, 0, &mut bindings);
+        assert_eq!(screen.selected(), 0);
+    }
+
+    #[test]
+    fn one_press_sets_the_binding() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        assert!(screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings));
+        assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
+        assert!(matches!(screen.mode, Mode::Browse));
+        assert_eq!(screen.status(), "HANDBRAKE SET TO LEFT PADDLE");
+    }
+
+    #[test]
+    fn a_control_held_before_listening_needs_a_release() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Select, 0, LEFT_PADDLE, &mut bindings);
+        assert!(!screen.wheel(10, LEFT_PADDLE, 0, &mut bindings));
+        assert!(!screen.wheel(20, 0, 0, &mut bindings));
+        assert!(screen.wheel(30, LEFT_PADDLE, LEFT_PADDLE, &mut bindings));
+    }
+
+    #[test]
+    fn a_pulse_too_short_to_be_held_is_still_caught() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        assert!(screen.wheel(10, 0, DIAL, &mut bindings));
+        assert_eq!(bindings.get(Action::Handbrake), Some(usage(22)));
+    }
+
+    #[test]
+    fn listening_gives_up_and_changes_nothing() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        assert!(!screen.wheel(LISTEN_TIMEOUT_MS, 0, 0, &mut bindings));
+        assert!(matches!(screen.mode, Mode::Browse));
+        assert_eq!(bindings.iter().count(), 0);
+        assert_eq!(screen.status(), "NO PRESS DETECTED");
+    }
+
+    #[test]
+    fn cancelling_returns_without_closing_or_binding() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        screen.command(Command::Close, 10, 0, &mut bindings);
+        assert!(matches!(screen.mode, Mode::Browse));
+        assert!(!screen.done());
+        assert_eq!(bindings.iter().count(), 0);
+    }
+
+    #[test]
+    fn closing_from_browse_finishes() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        screen.command(Command::Close, 0, 0, &mut bindings);
+        assert!(screen.done());
+    }
+
+    #[test]
+    fn binding_a_used_control_moves_it_and_says_so() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        bindings.assign(Action::Horn, usage(6));
+        screen.command(Command::Select, 0, 0, &mut bindings);
+        screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
+        assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
+        assert_eq!(bindings.get(Action::Horn), None);
+        assert_eq!(
+            screen.status(),
+            "HANDBRAKE SET TO LEFT PADDLE, REMOVED FROM HORN"
+        );
+    }
+
+    #[test]
+    fn clear_reports_a_change_only_when_there_was_a_binding() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        assert!(!screen.command(Command::Clear, 0, 0, &mut bindings));
+        bindings.assign(Action::Handbrake, usage(6));
+        assert!(screen.command(Command::Clear, 0, 0, &mut bindings));
+        assert_eq!(bindings.get(Action::Handbrake), None);
+        assert_eq!(screen.status(), "HANDBRAKE CLEARED");
+    }
+
+    #[test]
+    fn the_wheel_never_runs_the_screen() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        let everything = WHEEL_X | 0b110 | (HAT_UP | HAT_DOWN) << HAT_SHIFT;
+        assert!(!screen.wheel(0, everything, everything, &mut bindings));
+        assert_eq!(screen.selected(), 0);
+        assert!(matches!(screen.mode, Mode::Browse));
+        assert!(!screen.done());
+    }
+
+    #[test]
+    fn any_control_can_be_bound_including_ones_that_used_to_run_the_screen() {
+        for bit in [WHEEL_X, 0b10, 0b100, HAT_UP << HAT_SHIFT] {
+            let mut screen = Screen::new();
+            let mut bindings = Bindings::default();
+            screen.command(Command::Select, 0, 0, &mut bindings);
+            assert!(screen.wheel(10, bit, bit, &mut bindings));
+            let bound = bindings.get(Action::Handbrake);
+            assert_eq!(bound.and_then(bit_for), Some(bit));
+        }
+    }
+
+    #[test]
+    fn pressing_a_bound_control_lights_its_row_for_a_moment() {
+        let mut screen = Screen::new();
+        let mut bindings = Bindings::default();
+        bindings.assign(Action::Horn, usage(22));
+        assert!(!screen.row_lit(1, 100));
+        screen.wheel(100, 0, DIAL, &mut bindings);
+        assert!(screen.row_lit(1, 100 + LIT_MS - 1));
+        assert!(!screen.row_lit(1, 100 + LIT_MS));
+        assert!(!screen.row_lit(0, 100));
+        assert!(!screen.row_lit(99, 100));
+    }
+
+    #[test]
+    fn a_row_shows_its_binding_or_that_it_is_listening() {
         let mut screen = Screen::new();
         let mut bindings = Bindings::default();
         assert_eq!(screen.row_value(0, &bindings), "NOT BOUND");
@@ -344,8 +491,6 @@ mod tests {
         screen.command(Command::Select, 0, 0, &mut bindings);
         assert_eq!(screen.row_value(0, &bindings), "PRESS A WHEEL CONTROL");
         assert_eq!(screen.row_value(1, &bindings), "LEFT PADDLE");
-        screen.wheel(10, 1 << 6, 1 << 6, &mut bindings);
-        assert_eq!(screen.row_value(0, &bindings), "R2?");
         assert_eq!(screen.row_value(99, &bindings), "");
     }
 
@@ -363,117 +508,10 @@ mod tests {
     }
 
     #[test]
-    fn selection_moves_and_wraps() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Up, 0, 0, &mut bindings);
-        assert_eq!(screen.selected, ROWS.len() - 1);
-        screen.command(Command::Down, 0, 0, &mut bindings);
-        assert_eq!(screen.selected, 0);
-    }
-
-    #[test]
-    fn a_press_is_confirmed_before_it_binds() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Select, 0, 0, &mut bindings);
-        assert!(!screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings));
-        assert_eq!(bindings.get(Action::Handbrake), None);
-        assert!(screen.command(Command::Select, 20, 0, &mut bindings));
-        assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
-    }
-
-    #[test]
-    fn a_control_held_before_listening_needs_a_release() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Select, 0, LEFT_PADDLE, &mut bindings);
-        screen.wheel(10, LEFT_PADDLE, 0, &mut bindings);
-        assert!(matches!(screen.mode, Mode::Listening(_)));
-        screen.wheel(20, 0, 0, &mut bindings);
-        screen.wheel(30, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
-        assert!(matches!(screen.mode, Mode::Confirm(_)));
-    }
-
-    #[test]
-    fn a_pulse_too_short_to_be_held_is_still_caught() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Select, 0, 0, &mut bindings);
-        screen.wheel(10, 0, DIAL, &mut bindings);
-        assert!(matches!(screen.mode, Mode::Confirm(control) if control == usage(22)));
-    }
-
-    #[test]
-    fn listening_gives_up_and_changes_nothing() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Select, 0, 0, &mut bindings);
-        assert!(!screen.wheel(LISTEN_TIMEOUT_MS, 0, 0, &mut bindings));
-        assert!(matches!(screen.mode, Mode::Browse));
-        assert_eq!(bindings.iter().count(), 0);
-    }
-
-    #[test]
-    fn cancelling_returns_without_closing_or_binding() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Select, 0, 0, &mut bindings);
-        screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
-        screen.command(Command::Close, 20, 0, &mut bindings);
-        assert!(matches!(screen.mode, Mode::Browse));
-        assert!(!screen.done());
-        assert_eq!(bindings.iter().count(), 0);
-    }
-
-    #[test]
-    fn closing_from_browse_finishes() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.command(Command::Close, 0, 0, &mut bindings);
-        assert!(screen.done());
-    }
-
-    #[test]
-    fn binding_a_used_control_warns_and_moves_it() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        bindings.assign(Action::Horn, usage(6));
-        screen.command(Command::Select, 0, 0, &mut bindings);
-        screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
-        let text = screen.status(&bindings);
-        assert!(text.contains("THIS CLEARS LEFT PADDLE FROM HORN"), "{text}");
-        screen.command(Command::Select, 20, 0, &mut bindings);
-        assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
-        assert_eq!(bindings.get(Action::Horn), None);
-    }
-
-    #[test]
-    fn clear_reports_a_change_only_when_there_was_a_binding() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        assert!(!screen.command(Command::Clear, 0, 0, &mut bindings));
-        bindings.assign(Action::Handbrake, usage(6));
-        assert!(screen.command(Command::Clear, 0, 0, &mut bindings));
-        assert_eq!(bindings.get(Action::Handbrake), None);
-    }
-
-    #[test]
-    fn the_wheel_works_the_screen() {
-        let mut screen = Screen::new();
-        let mut bindings = Bindings::default();
-        screen.wheel(0, 0, WHEEL_DOWN, &mut bindings);
-        assert_eq!(screen.selected, 1);
-        screen.wheel(0, 0, WHEEL_UP, &mut bindings);
-        assert_eq!(screen.selected, 0);
-        screen.wheel(0, WHEEL_SELECT, WHEEL_SELECT, &mut bindings);
-        assert!(matches!(screen.mode, Mode::Listening(_)));
-        screen.wheel(5, 0, 0, &mut bindings);
-        screen.wheel(10, LEFT_PADDLE, LEFT_PADDLE, &mut bindings);
-        screen.wheel(20, WHEEL_SELECT, WHEEL_SELECT, &mut bindings);
-        assert_eq!(bindings.get(Action::Handbrake), Some(usage(6)));
-        screen.wheel(30, 0, WHEEL_CLOSE, &mut bindings);
-        assert!(screen.done());
+    fn fired_functions_are_named_for_the_log() {
+        assert_eq!(fired_names(0), "none");
+        assert_eq!(fired_names(PAD_X), "horn");
+        assert_eq!(fired_names(PAD_A | PAD_X), "handbrake,horn");
     }
 
     #[test]

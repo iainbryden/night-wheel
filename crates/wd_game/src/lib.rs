@@ -35,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 11, 0);
+    const VERSION: SemVer = SemVer::new(0, 12, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -55,6 +55,7 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_ScreenRowValue", screen_row_value)),
             GlobalExport(global!(c"WheelDriveTest_ScreenSelected", screen_selected)),
             GlobalExport(global!(c"WheelDriveTest_ScreenSelect", screen_select)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenRowLit", screen_row_lit)),
             GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
             GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
         ]
@@ -63,7 +64,7 @@ impl Plugin for LoadTest {
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.11.0".to_owned());
+        log_file::send("plugin loaded, version 0.12.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -159,7 +160,6 @@ fn bindings_changed(config: &Config, screen: &mut settings::Screen) {
         .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
     match saved {
         Ok(()) => {
-            screen.set_message("SAVED".to_owned());
             log_file::send(format!(
                 "bindings saved: {}",
                 config
@@ -241,6 +241,11 @@ fn screen_select(row: i32) {
     }
 }
 
+fn screen_row_lit(row: i32) -> bool {
+    let now = shared::now_ms();
+    with_screen(|screen, _| screen.row_lit(usize::try_from(row).unwrap_or(usize::MAX), now))
+}
+
 fn screen_status() -> String {
     if SETTINGS
         .lock()
@@ -249,7 +254,7 @@ fn screen_status() -> String {
     {
         return "NO CALIBRATION FILE, SO BINDING IS NOT AVAILABLE".to_owned();
     }
-    with_screen(|screen, config| screen.status(&config.bindings))
+    with_screen(|screen, _| screen.status())
 }
 
 fn screen_hints() -> String {
