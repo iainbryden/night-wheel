@@ -75,6 +75,22 @@ Plugin 0.11.0. `wd_game.dll` SHA-256 `9935fa037607cc546a08054595fe2f95c039a650c6
 
 Checks: lints clean, 138 of 138 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Second build's game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. The game was still open when the log was read at about 11 minutes.
+
+- **User report:** the user suspects conflicts between button assignments, is not sure, does not like confirming with X, and asked for the menu to be reevaluated. No per-function results in a car were reported.
+- **Mouse works:** the log shows `wheel-row-clicked` many times, so this layer receives pointer events. Row text was not reported as a problem.
+- **Binding and saving work:** all six requested bindings were saved with the expected numbers: horn 6, camera 5, lights 22, radio 24, handbrake 8, exit 7.
+- **Going back:** the logged function list includes `gameuiMenuGameController.OnBack` and `PauseMenuGameController.OnGlobalRelease`. They are candidates for handling Escape. What they do has not been tested.
+
+Conflicts visible in the design, whether or not they are what the user saw:
+
+- X, Square, Circle and the D-pad both run the screen and can be bound.
+- Each function presses a gamepad button that the game also uses elsewhere. Right shoulder and D-pad left are examples in the game's mappings.
+- The route by which the wheel's D-pad reached the pause menu is still unknown.
+- Nothing logs which gamepad buttons were pressed in a car, so a conflict there can't be shown from this log.
+
 ## Next step
 
-With the user's approval and the game closed, install the second build. Then test the page, binding, each function in a car, saving across a restart, and no replay on resume.
+Put a redesign to the user: one press to bind with no confirmation, mouse and keyboard to run the page, and Escape to go back.
