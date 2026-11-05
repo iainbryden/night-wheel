@@ -66,6 +66,33 @@ The user completed Calibrate in the setup app, the first real use of its clicks 
 
 Both pedals read 0 when fully pressed, which confirms the raw-default risk fixed above was real. Those axis identities come from the user following the wizard's prompts. Whether each one matches the physical control is confirmed by the game run.
 
+## Game run, 2026-11-04
+
+Files replaced and hash-checked with user approval. G HUB open. Log read while the game was still running, so the run's end, shutdown and final save state are not covered.
+
+| Question | Result | Evidence |
+|---|---|---|
+| Does the game use `XInputGetState`? | **Yes** | First poll 6 s after load; hooks attached |
+| Do steering and pedals work in the car? | **Yes** | User report |
+| Does the driver check work? | **Yes, by log** | `driving-on` and `driving-off` logged; 0 seconds with a stale script while driving |
+| Does it feel right? | **No** | User: laggy; the car's wheel turns more slowly than the physical wheel; some input delay when turning |
+| Pause and on-foot behaviour | Not yet reported by the user | 0 applied polls in paused seconds. 39 applied polls in seconds logged as not driving, which fits the seconds around a transition because the state is sampled once per second, but this is not proven |
+
+Timing during 194 seconds of driving:
+
+| Stage | Measured |
+|---|---|
+| Decoding | Typically at most 2 to 4 microseconds; worst 937 microseconds |
+| Value age at poll while moving | Commonly at most 2 ms; capped by the 50 ms counting window, and inflated by slow movement |
+| Game's XInput polling | Very steady: median 62 per second, about 16 ms apart; worst gap under 20 ms |
+| Script updates | Often about 77 per second, independent of the poll rate |
+
+### Reading of the results
+
+The poll rate stayed near 62 per second while script updates ran faster, so the game appears to poll XInput on a fixed cycle of about 16 ms. That is the largest wait measured up to the point where the value enters the game: at most about 16 ms plus report spacing.
+
+The car's wheel turning more slowly than the physical wheel suggests a limit after the input, such as a steering rate limit or filter tuned for gamepads, or the `Preset_Vehicle` deadzone curve. **This is a hypothesis.** No measurement yet covers what the game does after the poll. `VehicleSteeringSettings_Record` exists in the SDK's declarations, with its fields not yet examined.
+
 ## Next step
 
-Files replaced and hash-checked with user approval. The user runs the game test.
+Examine the game's steering settings read-only, and measure input-to-steering response in the game.
