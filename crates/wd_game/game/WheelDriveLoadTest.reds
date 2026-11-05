@@ -99,32 +99,10 @@ protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
     let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
     if IsDefined(service) && service.IsScreenOpen() && e.IsAction(n"back") {
         WheelDriveTest_Event("wheel-back");
-        service.MarkBackHandled();
         WheelDriveTest_ScreenCommand(5);
         return true;
     }
     return wrappedMethod(e);
-}
-
-// The route that closes the pause menu, tried because the wrap above alone did not stop it.
-@wrapMethod(MenuScenario_PauseMenu)
-protected cb func OnClosePauseMenu() -> Bool {
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
-    if IsDefined(service) && service.TakeBackHandled() {
-        WheelDriveTest_Event("wheel-back-kept-menu");
-        return true;
-    }
-    return wrappedMethod();
-}
-
-@wrapMethod(gameuiMenuGameController)
-protected cb func OnBack(userData: ref<IScriptable>) -> Bool {
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
-    if IsDefined(service) && service.TakeBackHandled() {
-        WheelDriveTest_Event("wheel-back-kept-menu-by-onback");
-        return true;
-    }
-    return wrappedMethod(userData);
 }
 
 public class WheelDriveTestTick extends DelayCallback {
@@ -152,7 +130,8 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_status: ref<inkText>;
     private let m_hints: ref<inkText>;
     private let m_listedMenuFunctions: Bool;
-    private let m_backHandledFrames: Int32;
+    private let m_inMenu: Bool;
+    private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
     private let m_boostPeak: Float;
@@ -264,7 +243,12 @@ public class WheelDriveTestService extends ScriptableService {
     private func UpdateDriving() {
         let game = GetGameInstance();
         let player = GetPlayer(game);
-        let driving = IsDefined(player) && VehicleComponent.IsDriver(game, player);
+        let inMenu = this.IsInMenu();
+        if NotEquals(inMenu, this.m_inMenu) {
+            this.m_inMenu = inMenu;
+            WheelDriveTest_Event(s"in-menu: \(inMenu)");
+        }
+        let driving = !inMenu && IsDefined(player) && VehicleComponent.IsDriver(game, player);
         WheelDriveTest_SetDriving(driving);
         if driving {
             let actions = WheelDriveTest_TakeScriptActions();
@@ -330,7 +314,7 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_lastBoostTime = now;
         if !WheelDriveTest_BoostWanted() || this.m_autopilot {
             this.EndBoost("released");
-            if speed > this.m_topSeen {
+            if speed > this.m_topSeen && now - this.m_lastBoostEnd > 15.0 {
                 this.m_topSeen = speed;
             }
             return;
@@ -345,10 +329,11 @@ public class WheelDriveTestService extends ScriptableService {
         if speed > this.m_boostPeak {
             this.m_boostPeak = speed;
         }
+        this.m_lastBoostEnd = now;
         if speed < 1.0 || speed >= this.m_boostLimit || elapsed <= 0.0 || elapsed > 0.1 {
             return;
         }
-        let acceleration = MinF(6.0 + percent * 0.1, 16.0);
+        let acceleration = MinF(6.0 + percent * 0.12, 30.0);
         let push = vehicle.GetTotalMass() * acceleration * elapsed;
         let forward = vehicle.GetWorldForward();
         let event = new PhysicalImpulseEvent();
@@ -433,6 +418,14 @@ public class WheelDriveTestService extends ScriptableService {
             settings.ConfirmChanges();
         }
         WheelDriveTest_Event(s"radio: volume \(value)");
+    }
+
+    // In a menu such as the map, the wheel must stay out of the way, or its steering makes the game
+    // switch to gamepad controls.
+    private func IsInMenu() -> Bool {
+        let defs = GetAllBlackboardDefs().UI_System;
+        let board = GameInstance.GetBlackboardSystem(GetGameInstance()).Get(defs);
+        return IsDefined(board) && board.GetBool(defs.IsInMenu);
     }
 
     private func StartListening(player: ref<PlayerPuppet>) {
@@ -521,26 +514,11 @@ public class WheelDriveTestService extends ScriptableService {
 
     private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
         this.m_steering = WheelDriveTest_Read();
-        if this.m_backHandledFrames > 0 {
-            this.m_backHandledFrames -= 1;
-        }
         this.UpdateScreen();
     }
 
     public func IsScreenOpen() -> Bool {
         return IsDefined(this.m_screen);
-    }
-
-    public func MarkBackHandled() {
-        this.m_backHandledFrames = 30;
-    }
-
-    public func TakeBackHandled() -> Bool {
-        if this.m_backHandledFrames > 0 {
-            this.m_backHandledFrames = 0;
-            return true;
-        }
-        return false;
     }
 
     public func SetMenuRoot(root: ref<inkWidget>) {
@@ -696,7 +674,7 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         this.m_listedMenuFunctions = true;
-        let cls = Reflection.GetClass(n"PauseMenuGameController");
+        let cls = Reflection.GetClass(n"MenuScenario_PauseMenu");
         while IsDefined(cls) {
             for func in cls.GetFunctions() {
                 WheelDriveTest_Event(s"menu-function: \(NameToString(cls.GetName())).\(NameToString(func.GetName()))");
@@ -785,7 +763,7 @@ public class WheelDriveTestService extends ScriptableService {
         }
         let percent = WheelDriveTest_BoostPercent();
         this.m_boostValue.SetText(s"\(percent)%");
-        this.m_boostFill.SetSize(new Vector2(460.0 * Cast<Float>(percent) / 100.0, 56.0));
+        this.m_boostFill.SetSize(new Vector2(460.0 * Cast<Float>(percent) / 200.0, 56.0));
         this.m_status.SetText(WheelDriveTest_ScreenStatus());
         this.m_hints.SetText(WheelDriveTest_ScreenHints());
     }

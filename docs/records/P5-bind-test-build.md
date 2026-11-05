@@ -152,6 +152,28 @@ Plugin 0.14.0. `wd_game.dll` SHA-256 `b49b2194d904850ced5c72245112dbd9ee87c29f2d
 
 Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Fifth build's game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. About 13 minutes, a clean shutdown and no new crash report.
+
+- **Boost moved the car.** Speeds are in the game's own units from `GetCurrentSpeed`, probably m/s. At 25%, with a fastest seen of about 29.8, it peaked at 38.4 against a limit of 37.2. At 100%, it peaked at about 51 over 8 seconds and about 49.5 over 15 seconds, well short of a limit of about 77. So something other than the push limits the car at these speeds. Whether the car stayed stable has not been reported.
+- **Limit bug.** Speed left over after boosting counted as "fastest seen", so the limit crept up from 38.4 to 48.5 between presses.
+- **Going back failed again.** `wheel-back` and `session-resume` share a timestamp, and neither new wrap logged anything.
+- **Engine record.** It has `EngineMaxTorque`, `MaxRPM`, `ResistanceTorque` and others, with no top speed value.
+- **Autopilot.** No change of the flag was logged, and the user has not reported using Autodrive in this run.
+- **Map defect (user report).** In the map, the interface kept switching between gamepad and keyboard and mouse, and the user could not set a destination. The log shows no pause event in that part of the run and the wheel still applying while driving. The game's map doesn't raise `Session/Pause`, so steering and pedal values kept changing the reported gamepad state. This is a likely cause, inferred and not proven. It is a fault in this project's gate.
+
+## Sixth build
+
+Plugin 0.15.0. `wd_game.dll` SHA-256 `9ad95869f492edb8696729027dced37f05f35b0e04d2f329f3f637c4f068dd11`; `WheelDriveLoadTest.reds` SHA-256 `5fde07a4aa81c7bf0b0b475641a9668c498e1a6d4cc6dcb34d7e3653ec711fef`. Staged in `out/menu-test/`. Not run in the game.
+
+- **Menus.** The wheel doesn't apply while the `UI_System.IsInMenu` blackboard flag is true, and the log records each change.
+- **Boost range.** 25% to 200%, as the user asked. Push strength now rises to 30 m/s² at 200%, a provisional value.
+- **Limit bug fixed.** Fastest seen updates only 15 seconds after boost ends.
+- **Going back.** The two wraps that never fired are removed, and the page's hints now say period, because Escape still closes the pause menu. The menu scenario's function names are logged, to look for another route.
+
+Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-With the user's approval, install and test going back, Autodrive, the new functions and boost.
+With the user's approval, install and test the map, boost at high strengths, and stability.

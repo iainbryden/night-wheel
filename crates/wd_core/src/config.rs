@@ -44,7 +44,7 @@ pub struct Config {
 /// Boost strength when none has been chosen.
 pub const DEFAULT_BOOST_PERCENT: u32 = 25;
 /// The strengths a player may choose.
-pub const BOOST_PERCENT_RANGE: std::ops::RangeInclusive<u32> = 5..=100;
+pub const BOOST_PERCENT_RANGE: std::ops::RangeInclusive<u32> = 25..=200;
 
 /// Why a configuration could not be parsed or accepted.
 #[derive(Debug, Clone, PartialEq)]
@@ -447,12 +447,12 @@ mod tests {
 
     #[test]
     fn a_boost_strength_out_of_range_is_refused() {
-        for bad in [0, 4, 101] {
+        for bad in [0, 24, 201] {
             let mut config = sample();
             config.boost_percent = bad;
             assert!(config.validate().is_err(), "{bad}");
         }
-        for good in [5, 25, 100] {
+        for good in [25, 100, 200] {
             let mut config = sample();
             config.boost_percent = good;
             assert!(config.validate().is_ok(), "{good}");

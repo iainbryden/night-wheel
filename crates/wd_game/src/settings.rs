@@ -383,8 +383,8 @@ impl Screen {
     /// The controls available now.
     pub fn hints(&self) -> &'static str {
         match self.mode {
-            Mode::Browse => "CLICK OR ENTER  BIND     DELETE  CLEAR     ESC  BACK",
-            Mode::Listening(_) => "ESC  CANCEL",
+            Mode::Browse => "CLICK OR ENTER  BIND     DELETE  CLEAR     PERIOD  BACK",
+            Mode::Listening(_) => "PERIOD  CANCEL",
         }
     }
 }
