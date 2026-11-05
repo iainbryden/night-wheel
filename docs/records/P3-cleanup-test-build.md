@@ -41,6 +41,23 @@ The earlier compensation never sent stick values between zero and 0.40, so the z
 - The entry's label is plain English text and is not translated.
 - `OnMenuItemActivated` is wrapped, so a change there in a game update could affect the pause menu. Only the WHEEL entry is intercepted.
 
+## Game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked, multiplier file set to 4. The game was still open, paused, when the log was read at about 7 minutes, so shutdown is not covered.
+
+- **Entry:** the WHEEL entry appeared, per the user. The log shows it added on each pause and chosen three times to open or close the panel.
+- **Panel:** it opened and closed from the entry and from the period key. The user reports the live steering value worked.
+- **Steering speed:** two cars read back at the new values, 4, 0.6, 400, 520 and 4, 0.4, 380, 512. All 108 drive models took the change. The user reports tire speed looks as good as at x10, and driving works well.
+- **Dead spot correction:** no separate report on feel just off centre.
+- **Stability:** no crash per the user, no new crash report, and the wheel stayed connected.
+
+Not confirmed:
+
+- Whether the game's own pause menu entries still work. Resume happened twice in the log, but by what route is unknown.
+- Shutdown with this build.
+- Steering speed below x4.
+- Tire speed is the user's judgement. Tire angle is not measured.
+
 ## Next step
 
-With the user's approval, install and run with the multiplier at 4. The user reports whether the WHEEL entry appears and opens the panel, whether the pause menu's other entries still work, and whether steering still keeps up.
+The user checks the game's own pause menu entries and quits. A name for the mod and the menu label are the user's decisions. Then build the real settings screen, starting with reading the wheel's buttons.

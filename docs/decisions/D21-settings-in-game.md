@@ -1,6 +1,6 @@
 # Decision D21: all player settings live in the mod's own in-game screen
 
-Status: accepted by the user on 2026-11-05 for where settings live. The way to open the screen is unproven.
+Status: accepted by the user on 2026-11-05 for where settings live. A pause menu entry and a panel opened from it worked in a test on 2026-11-05; see `docs/records/P3-cleanup-test-build.md`. Input handling for a real screen is unproven.
 Date: 2026-11-05
 Requirements affected: R07, R08, R12.
 
