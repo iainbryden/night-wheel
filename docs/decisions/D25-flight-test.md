@@ -40,6 +40,24 @@ Plugin 0.18.0. `wd_game.dll` SHA-256 `d588afe221537309bcd7d8a04bfa2805a2acd1cff1
 
 Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Second run, 2026-11-05
+
+Approved by the user, who asked to test; files replaced and hash-checked. User report: climb and descend don't work.
+
+- **The controls work.** Climb and Descend were bound to plus and minus, `fired` names them, and the target height moved as far as 84 metres.
+- **The car didn't follow.** With lift at its 40 m/s² limit, the height stayed between about 0 and 2.5 metres, with vertical speed swinging between about -5 and +4 and pitch reaching -0.59. This is the hopping seen before.
+- **Inferred cause.** Lift was applied at the vehicle's position, which may not be its centre of mass, so strong lift tips the nose down into the ground. Not proven. The earlier hold at 3 metres used lift near 10, where the tipping would be small.
+
+## Third build
+
+Plugin 0.19.0. `wd_game.dll` SHA-256 `eb09b162a72d04bca27031ee835fb100d08e55ea14000c5685b644391289e5b0`; `WheelDriveLoadTest.reds` SHA-256 `353d5adef434ca7fd1927b00c3f6828dc5f1165687e62e9ec46aaf06b9260e59`. Staged in `out/flight3-test/`. Not run in the game.
+
+- Lift, thrust and the turning and levelling pairs act around the centre of mass, using the drive model's `Center_of_mass_offset`. The directions of that offset are assumed from its name, and the log records it.
+- Lift is limited to 20 m/s², and levelling is stronger.
+- The target height stays within 15 metres of the car, so letting go of Climb stops the climb soon.
+
+Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Unknowns
 
 - Whether the car's inertia suits these values. The first version may wobble or feel wrong.

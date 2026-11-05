@@ -158,6 +158,7 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_flightLastPitch: Float;
     private let m_flightLastRoll: Float;
     private let m_landingStill: Float;
+    private let m_flightLoggedCentre: Bool;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -433,6 +434,8 @@ public class WheelDriveTestService extends ScriptableService {
             climb -= 12.0;
         }
         this.m_flightTarget = ClampF(this.m_flightTarget + climb * elapsed, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
+        // The target stays near the car, so letting go of Climb stops the climb soon.
+        this.m_flightTarget = ClampF(this.m_flightTarget, position.Z - 15.0, position.Z + 15.0);
         let wantedRise = ClampF((this.m_flightTarget - position.Z) * 1.5, -12.0, 12.0);
         if this.m_landing {
             wantedRise = -4.0;
@@ -443,7 +446,7 @@ public class WheelDriveTestService extends ScriptableService {
             }
         }
         // Below zero pushes down, because the car was seen to keep rising with no lift at all.
-        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, -15.0, 40.0);
+        let lift = ClampF(9.81 + (wantedRise - velocity.Z) * 3.0, -15.0, 20.0);
 
         // Turn rate, in degrees a second, with a positive wheel turning the heading negative.
         let yaw = vehicle.GetWorldYaw();
@@ -462,8 +465,8 @@ public class WheelDriveTestService extends ScriptableService {
         // Level, from how far the nose and right side are above level and how fast they move.
         let pitch = forward.Z;
         let roll = right.Z;
-        let pitchPush = ClampF(-(pitch * 8.0 + (pitch - this.m_flightLastPitch) / elapsed * 2.5), -10.0, 10.0);
-        let rollPush = ClampF(-(roll * 8.0 + (roll - this.m_flightLastRoll) / elapsed * 2.5), -10.0, 10.0);
+        let pitchPush = ClampF(-(pitch * 12.0 + (pitch - this.m_flightLastPitch) / elapsed * 3.0), -20.0, 20.0);
+        let rollPush = ClampF(-(roll * 12.0 + (roll - this.m_flightLastRoll) / elapsed * 3.0), -20.0, 20.0);
         this.m_flightLastPitch = pitch;
         this.m_flightLastRoll = roll;
 
@@ -485,8 +488,25 @@ public class WheelDriveTestService extends ScriptableService {
         let slide = velocity.X * right.X + velocity.Y * right.Y;
         let ease = ClampF(slide * 0.8, -6.0, 6.0);
 
+        // Lift and thrust go through the centre of mass, so they don't tip the car. The offset comes
+        // from the drive model, and is along the car's right, forward and up directions as far as
+        // its name shows. The log records it.
+        let centre = position;
+        let model = vehicle.GetRecord().VehDriveModelDataHandle();
+        if IsDefined(model) {
+            let offset = model.Center_of_mass_offset();
+            centre = new Vector4(
+                position.X + right.X * offset.X + forward.X * offset.Y,
+                position.Y + right.Y * offset.X + forward.Y * offset.Y,
+                position.Z + right.Z * offset.X + forward.Z * offset.Y + offset.Z,
+                1.0);
+            if !this.m_flightLoggedCentre {
+                this.m_flightLoggedCentre = true;
+                WheelDriveTest_Event(s"flight: centre of mass offset \(FloatToString(offset.X)), \(FloatToString(offset.Y)), \(FloatToString(offset.Z)), mass \(FloatToString(mass))");
+            }
+        }
         let step = mass * elapsed;
-        this.Push(vehicle, position,
+        this.Push(vehicle, centre,
             (aheadX * thrust - velocity.X * braking - right.X * ease) * step,
             (aheadY * thrust - velocity.Y * braking - right.Y * ease) * step,
             lift * step);
@@ -494,13 +514,13 @@ public class WheelDriveTestService extends ScriptableService {
         // Opposed pairs turn and level the car without moving it.
         let pitchStep = pitchPush * step;
         let turnStep = turnPush * step;
-        let nose = new Vector4(position.X + forward.X * 2.0, position.Y + forward.Y * 2.0, position.Z + forward.Z * 2.0, 1.0);
-        let tail = new Vector4(position.X - forward.X * 2.0, position.Y - forward.Y * 2.0, position.Z - forward.Z * 2.0, 1.0);
+        let nose = new Vector4(centre.X + forward.X * 2.0, centre.Y + forward.Y * 2.0, centre.Z + forward.Z * 2.0, 1.0);
+        let tail = new Vector4(centre.X - forward.X * 2.0, centre.Y - forward.Y * 2.0, centre.Z - forward.Z * 2.0, 1.0);
         this.Push(vehicle, nose, right.X * turnStep, right.Y * turnStep, pitchStep);
         this.Push(vehicle, tail, -right.X * turnStep, -right.Y * turnStep, -pitchStep);
         let rollStep = rollPush * step;
-        let rightSide = new Vector4(position.X + right.X, position.Y + right.Y, position.Z + right.Z, 1.0);
-        let leftSide = new Vector4(position.X - right.X, position.Y - right.Y, position.Z - right.Z, 1.0);
+        let rightSide = new Vector4(centre.X + right.X, centre.Y + right.Y, centre.Z + right.Z, 1.0);
+        let leftSide = new Vector4(centre.X - right.X, centre.Y - right.Y, centre.Z - right.Z, 1.0);
         this.Push(vehicle, rightSide, 0.0, 0.0, rollStep);
         this.Push(vehicle, leftSide, 0.0, 0.0, -rollStep);
 
