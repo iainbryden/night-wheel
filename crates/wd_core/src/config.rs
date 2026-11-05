@@ -37,7 +37,14 @@ pub struct Config {
     pub throttle: PedalCalibration,
     pub brake: PedalCalibration,
     pub bindings: Bindings,
+    /// How far boost may raise the car's speed, as a percentage.
+    pub boost_percent: u32,
 }
+
+/// Boost strength when none has been chosen.
+pub const DEFAULT_BOOST_PERCENT: u32 = 25;
+/// The strengths a player may choose.
+pub const BOOST_PERCENT_RANGE: std::ops::RangeInclusive<u32> = 5..=100;
 
 /// Why a configuration could not be parsed or accepted.
 #[derive(Debug, Clone, PartialEq)]
@@ -125,6 +132,7 @@ impl Config {
             throttle: calibrated.throttle,
             brake: calibrated.brake,
             bindings: Bindings::default(),
+            boost_percent: DEFAULT_BOOST_PERCENT,
         };
         if let Some(previous) = previous {
             config.steering.deadzone = previous.steering.deadzone;
@@ -141,6 +149,7 @@ impl Config {
                 pedal.inverted = old.inverted;
             }
             config.bindings = previous.bindings.clone();
+            config.boost_percent = previous.boost_percent;
         }
         config
     }
@@ -157,6 +166,9 @@ impl Config {
         self.steering.validate()?;
         self.throttle.validate()?;
         self.brake.validate()?;
+        if !BOOST_PERCENT_RANGE.contains(&self.boost_percent) {
+            return Err(ConfigError::BadValue("boost.percent"));
+        }
         Ok(())
     }
 
@@ -224,7 +236,12 @@ impl Config {
                 "brake.inverted",
             ])?,
             bindings: Bindings::default(),
+            boost_percent: DEFAULT_BOOST_PERCENT,
         };
+        // Files saved before boost existed have no strength, and that is not an error.
+        if fields.values.contains_key("boost.percent") {
+            config.boost_percent = fields.take("boost.percent")?;
+        }
         for (key, value) in fields.values {
             let action = key
                 .strip_prefix(BINDING_PREFIX)
@@ -280,6 +297,7 @@ impl Config {
                 p.rest, p.full, p.rest_deadzone, p.full_deadzone, p.exponent, p.inverted
             ));
         }
+        text.push_str(&format!("boost.percent = {}\n", self.boost_percent));
         for (action, control) in self.bindings.iter() {
             text.push_str(&format!("{BINDING_PREFIX}{} = {control}\n", action.key()));
         }
@@ -411,6 +429,37 @@ mod tests {
     }
 
     #[test]
+    fn a_file_without_a_boost_strength_gets_the_default() {
+        let mut config = sample();
+        config.boost_percent = 60;
+        let saved = config.to_text();
+        assert_eq!(Config::parse(&saved).unwrap().boost_percent, 60);
+        let older: String = saved
+            .lines()
+            .filter(|line| !line.starts_with("boost.percent"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        assert_eq!(
+            Config::parse(&older).unwrap().boost_percent,
+            DEFAULT_BOOST_PERCENT
+        );
+    }
+
+    #[test]
+    fn a_boost_strength_out_of_range_is_refused() {
+        for bad in [0, 4, 101] {
+            let mut config = sample();
+            config.boost_percent = bad;
+            assert!(config.validate().is_err(), "{bad}");
+        }
+        for good in [5, 25, 100] {
+            let mut config = sample();
+            config.boost_percent = good;
+            assert!(config.validate().is_ok(), "{good}");
+        }
+    }
+
+    #[test]
     fn bindings_round_trip() {
         let mut config = sample();
         config.bindings.assign(
@@ -501,6 +550,7 @@ mod tests {
                 brake: axis(0x35),
             },
             bindings: Bindings::default(),
+            boost_percent: DEFAULT_BOOST_PERCENT,
             steering: SteeringCalibration {
                 left: -100,
                 center: 3,

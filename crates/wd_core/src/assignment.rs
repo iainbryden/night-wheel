@@ -29,11 +29,15 @@ pub enum Action {
     RadioToggle,
     RadioVolumeUp,
     RadioVolumeDown,
+    CameraReset,
+    ZoomIn,
+    ZoomOut,
+    Scanner,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 24] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -54,6 +58,10 @@ impl Action {
         Self::RadioToggle,
         Self::RadioVolumeUp,
         Self::RadioVolumeDown,
+        Self::CameraReset,
+        Self::ZoomIn,
+        Self::ZoomOut,
+        Self::Scanner,
     ];
 
     /// Stable name used in saved settings. Do not change once released.
@@ -79,6 +87,10 @@ impl Action {
             Self::RadioToggle => "radio_toggle",
             Self::RadioVolumeUp => "radio_volume_up",
             Self::RadioVolumeDown => "radio_volume_down",
+            Self::CameraReset => "camera_reset",
+            Self::ZoomIn => "zoom_in",
+            Self::ZoomOut => "zoom_out",
+            Self::Scanner => "scanner",
         }
     }
 
@@ -105,6 +117,10 @@ impl Action {
             Self::RadioToggle => "Radio on/off",
             Self::RadioVolumeUp => "Radio volume up",
             Self::RadioVolumeDown => "Radio volume down",
+            Self::CameraReset => "Reset camera",
+            Self::ZoomIn => "Zoom in",
+            Self::ZoomOut => "Zoom out",
+            Self::Scanner => "Scanner",
         }
     }
 

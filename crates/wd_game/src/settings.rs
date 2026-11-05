@@ -14,6 +14,10 @@ const BUTTON_PAGE: u16 = 0x09;
 // Gamepad button values from Microsoft's XINPUT_GAMEPAD documentation.
 const PAD_DPAD_LEFT: u32 = 0x0004;
 const PAD_DPAD_RIGHT: u32 = 0x0008;
+const PAD_DPAD_UP: u32 = 0x0001;
+const PAD_DPAD_DOWN: u32 = 0x0002;
+const PAD_START: u32 = 0x0010;
+const PAD_LEFT_SHOULDER: u32 = 0x0100;
 const PAD_LEFT_THUMB: u32 = 0x0040;
 const PAD_RIGHT_THUMB: u32 = 0x0080;
 const PAD_RIGHT_SHOULDER: u32 = 0x0200;
@@ -30,18 +34,26 @@ const SCRIPT_RADIO_NEXT: u32 = 2 << SCRIPT_SHIFT;
 const SCRIPT_RADIO_PREVIOUS: u32 = 4 << SCRIPT_SHIFT;
 const SCRIPT_VOLUME_UP: u32 = 8 << SCRIPT_SHIFT;
 const SCRIPT_VOLUME_DOWN: u32 = 16 << SCRIPT_SHIFT;
+/// Held rather than pressed once, so the script asks for it each frame.
+pub const SCRIPT_BOOST: u32 = 32 << SCRIPT_SHIFT;
 
 /// The functions on the screen and how each one reaches the game. Gamepad pairs come from the
 /// game's `inputContexts.xml` and `inputUserMappings.xml` on patch 2.5 (SRC-032).
-pub const ROWS: [(Action, u32); 14] = [
+pub const ROWS: [(Action, u32); 20] = [
     (Action::Handbrake, PAD_A),
     (Action::Horn, PAD_X),
     (Action::Lights, PAD_DPAD_LEFT),
-    (Action::CameraChange, PAD_DPAD_RIGHT),
-    (Action::RearView, PAD_RIGHT_THUMB),
     (Action::VehicleExit, PAD_B),
     (Action::Autodrive, PAD_LEFT_THUMB),
     (Action::CombatMode, PAD_Y),
+    (Action::Boost, SCRIPT_BOOST),
+    (Action::Scanner, PAD_LEFT_SHOULDER),
+    (Action::PauseMenu, PAD_START),
+    (Action::CameraChange, PAD_DPAD_RIGHT),
+    (Action::RearView, PAD_RIGHT_THUMB),
+    (Action::CameraReset, PAD_LEFT_THUMB),
+    (Action::ZoomIn, PAD_DPAD_UP),
+    (Action::ZoomOut, PAD_DPAD_DOWN),
     (Action::RadioMenu, PAD_RIGHT_SHOULDER),
     (Action::RadioToggle, SCRIPT_RADIO_TOGGLE),
     (Action::RadioNext, SCRIPT_RADIO_NEXT),
@@ -50,15 +62,32 @@ pub const ROWS: [(Action, u32); 14] = [
     (Action::RadioVolumeDown, SCRIPT_VOLUME_DOWN),
 ];
 
-/// Where each section starts on the page, and its title.
-const SECTIONS: [(usize, &str); 2] = [(0, "Driving"), (8, "Radio")];
+/// The row with the boost strength slider beneath it.
+pub const BOOST_ROW: usize = 6;
+
+/// Where each section starts on the page, its title, and its column.
+const SECTIONS: [(usize, &str, usize); 4] = [
+    (0, "Driving", 0),
+    (7, "Other", 0),
+    (9, "Camera", 1),
+    (14, "Radio", 1),
+];
 
 /// The title of the section that starts at a row, if one does.
 pub fn section_at(row: usize) -> &'static str {
     SECTIONS
         .iter()
-        .find(|(start, _)| *start == row)
-        .map_or("", |(_, title)| title)
+        .find(|(start, _, _)| *start == row)
+        .map_or("", |(_, title, _)| title)
+}
+
+/// The page column a row sits in.
+pub fn column_of(row: usize) -> usize {
+    SECTIONS
+        .iter()
+        .rev()
+        .find(|(start, _, _)| *start <= row)
+        .map_or(0, |(_, _, column)| *column)
 }
 
 /// How long a row stays lit after its control is pressed, so a dial click can be seen.
@@ -537,9 +566,20 @@ mod tests {
     #[test]
     fn sections_start_where_they_should() {
         assert_eq!(section_at(0), "Driving");
-        assert_eq!(section_at(8), "Radio");
+        assert_eq!(section_at(9), "Camera");
+        assert_eq!(section_at(14), "Radio");
         assert_eq!(section_at(1), "");
-        assert_eq!(ROWS[8].0, Action::RadioMenu);
+        assert_eq!(ROWS[9].0, Action::CameraChange);
+        assert_eq!(ROWS[14].0, Action::RadioMenu);
+        assert_eq!(ROWS[BOOST_ROW].0, Action::Boost);
+    }
+
+    #[test]
+    fn rows_fall_in_their_section_column() {
+        assert_eq!(column_of(0), 0);
+        assert_eq!(column_of(8), 0);
+        assert_eq!(column_of(9), 1);
+        assert_eq!(column_of(19), 1);
     }
 
     #[test]
@@ -565,9 +605,9 @@ mod tests {
     }
 
     #[test]
-    fn every_function_presses_a_different_gamepad_button() {
-        let flags: BTreeSet<u32> = ROWS.iter().map(|(_, flag)| *flag).collect();
-        assert_eq!(flags.len(), ROWS.len());
+    fn each_function_appears_once() {
+        let actions: BTreeSet<Action> = ROWS.iter().map(|(action, _)| *action).collect();
+        assert_eq!(actions.len(), ROWS.len());
     }
 
     #[test]

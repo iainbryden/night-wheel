@@ -35,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 13, 0);
+    const VERSION: SemVer = SemVer::new(0, 14, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -61,6 +61,12 @@ impl Plugin for LoadTest {
                 c"WheelDriveTest_TakeScriptActions",
                 take_script_actions
             )),
+            GlobalExport(global!(c"WheelDriveTest_ScreenColumn", screen_column)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenBoostRow", screen_boost_row)),
+            GlobalExport(global!(c"WheelDriveTest_BoostPercent", boost_percent)),
+            GlobalExport(global!(c"WheelDriveTest_BoostAdjust", boost_adjust)),
+            GlobalExport(global!(c"WheelDriveTest_BoostWanted", boost_wanted)),
+            GlobalExport(global!(c"WheelDriveTest_SetAutopilot", set_autopilot)),
             GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
             GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
         ]
@@ -69,7 +75,7 @@ impl Plugin for LoadTest {
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.13.0".to_owned());
+        log_file::send("plugin loaded, version 0.14.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -248,6 +254,52 @@ fn screen_select(row: i32) {
 
 fn screen_section(row: i32) -> String {
     settings::section_at(usize::try_from(row).unwrap_or(usize::MAX)).to_owned()
+}
+
+fn screen_column(row: i32) -> i32 {
+    settings::column_of(usize::try_from(row).unwrap_or(usize::MAX)) as i32
+}
+
+fn screen_boost_row() -> i32 {
+    settings::BOOST_ROW as i32
+}
+
+fn boost_percent() -> i32 {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map_or(config::DEFAULT_BOOST_PERCENT, |config| config.boost_percent) as i32
+}
+
+/// Moves the boost strength in steps of 5, within the allowed range, and saves it.
+fn boost_adjust(steps: i32) {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let Some(config) = settings.as_mut() else {
+        return;
+    };
+    let range = config::BOOST_PERCENT_RANGE;
+    let moved = (i64::from(config.boost_percent) + i64::from(steps) * 5)
+        .clamp(i64::from(*range.start()), i64::from(*range.end())) as u32;
+    if moved == config.boost_percent {
+        return;
+    }
+    config.boost_percent = moved;
+    let saved = profile_path()
+        .ok_or_else(|| "no settings folder".to_owned())
+        .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
+    match saved {
+        Ok(()) => log_file::send(format!("boost strength saved: {moved}%")),
+        Err(problem) => log_file::send(format!("boost strength not saved: {problem}")),
+    }
+}
+
+fn boost_wanted() -> bool {
+    shared::boost_wanted()
+}
+
+fn set_autopilot(on: bool) {
+    shared::set_autopilot(on);
 }
 
 fn take_script_actions() -> i32 {

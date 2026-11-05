@@ -25,6 +25,12 @@ native func WheelDriveTest_ScreenSelect(row: Int32);
 native func WheelDriveTest_ScreenRowLit(row: Int32) -> Bool;
 native func WheelDriveTest_ScreenSection(row: Int32) -> String;
 native func WheelDriveTest_TakeScriptActions() -> Int32;
+native func WheelDriveTest_ScreenColumn(row: Int32) -> Int32;
+native func WheelDriveTest_ScreenBoostRow() -> Int32;
+native func WheelDriveTest_BoostPercent() -> Int32;
+native func WheelDriveTest_BoostAdjust(steps: Int32);
+native func WheelDriveTest_BoostWanted() -> Bool;
+native func WheelDriveTest_SetAutopilot(on: Bool);
 native func WheelDriveTest_ScreenStatus() -> String;
 native func WheelDriveTest_ScreenHints() -> String;
 
@@ -93,10 +99,32 @@ protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
     let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
     if IsDefined(service) && service.IsScreenOpen() && e.IsAction(n"back") {
         WheelDriveTest_Event("wheel-back");
+        service.MarkBackHandled();
         WheelDriveTest_ScreenCommand(5);
         return true;
     }
     return wrappedMethod(e);
+}
+
+// The route that closes the pause menu, tried because the wrap above alone did not stop it.
+@wrapMethod(MenuScenario_PauseMenu)
+protected cb func OnClosePauseMenu() -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) && service.TakeBackHandled() {
+        WheelDriveTest_Event("wheel-back-kept-menu");
+        return true;
+    }
+    return wrappedMethod();
+}
+
+@wrapMethod(gameuiMenuGameController)
+protected cb func OnBack(userData: ref<IScriptable>) -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    if IsDefined(service) && service.TakeBackHandled() {
+        WheelDriveTest_Event("wheel-back-kept-menu-by-onback");
+        return true;
+    }
+    return wrappedMethod(userData);
 }
 
 public class WheelDriveTestTick extends DelayCallback {
@@ -124,6 +152,17 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_status: ref<inkText>;
     private let m_hints: ref<inkText>;
     private let m_listedMenuFunctions: Bool;
+    private let m_backHandledFrames: Int32;
+    private let m_autopilot: Bool;
+    private let m_boosting: Bool;
+    private let m_boostPeak: Float;
+    private let m_boostLimit: Float;
+    private let m_topSeen: Float;
+    private let m_boostVehicle: EntityID;
+    private let m_lastBoostTime: Float;
+    private let m_reportedEngine: Bool;
+    private let m_boostValue: ref<inkText>;
+    private let m_boostFill: ref<inkRectangle>;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -203,6 +242,12 @@ public class WheelDriveTestService extends ScriptableService {
             case EInputKey.IK_Period:
                 WheelDriveTest_ScreenCommand(5);
                 break;
+            case EInputKey.IK_Left:
+                WheelDriveTest_BoostAdjust(-1);
+                break;
+            case EInputKey.IK_Right:
+                WheelDriveTest_BoostAdjust(1);
+                break;
             default:
                 break;
         }
@@ -226,6 +271,14 @@ public class WheelDriveTestService extends ScriptableService {
             if actions != 0 {
                 this.RunRadioActions(player, actions);
             }
+            this.UpdateAutopilot(player);
+            this.UpdateBoost(player);
+        } else {
+            this.EndBoost("not driving");
+            if this.m_autopilot {
+                this.m_autopilot = false;
+                WheelDriveTest_SetAutopilot(false);
+            }
         }
         if NotEquals(driving, this.m_driving) {
             this.m_driving = driving;
@@ -233,6 +286,102 @@ public class WheelDriveTestService extends ScriptableService {
             if driving {
                 this.StartListening(player);
                 this.ReportRates(player);
+            }
+        }
+    }
+
+    // The game's own driving must not have the wheel steering against it. The flag's name comes
+    // from the game's vehicle blackboard, and the log shows whether it follows Autodrive.
+    private func UpdateAutopilot(player: ref<PlayerPuppet>) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        let board = vehicle.GetBlackboard();
+        if !IsDefined(board) {
+            return;
+        }
+        let on = board.GetBool(GetAllBlackboardDefs().Vehicle.IsAutopilotOn);
+        if NotEquals(on, this.m_autopilot) {
+            this.m_autopilot = on;
+            WheelDriveTest_SetAutopilot(on);
+            WheelDriveTest_Event(s"autopilot: \(on)");
+        }
+    }
+
+    // Boost pushes the car forward through the physics system while the control is held, up to a
+    // limit above the fastest speed seen without boost. It changes no vehicle data and saves
+    // nothing. The push strength is a provisional test value.
+    private func UpdateBoost(player: ref<PlayerPuppet>) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        this.ReportEngine(vehicle);
+        let id = vehicle.GetEntityID();
+        if NotEquals(id, this.m_boostVehicle) {
+            this.m_boostVehicle = id;
+            this.m_topSeen = 0.0;
+            this.EndBoost("new vehicle");
+        }
+        let speed = vehicle.GetCurrentSpeed();
+        let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
+        let elapsed = now - this.m_lastBoostTime;
+        this.m_lastBoostTime = now;
+        if !WheelDriveTest_BoostWanted() || this.m_autopilot {
+            this.EndBoost("released");
+            if speed > this.m_topSeen {
+                this.m_topSeen = speed;
+            }
+            return;
+        }
+        let percent = Cast<Float>(WheelDriveTest_BoostPercent());
+        if !this.m_boosting {
+            this.m_boosting = true;
+            this.m_boostPeak = speed;
+            this.m_boostLimit = MaxF(this.m_topSeen, speed) * (1.0 + percent / 100.0);
+            WheelDriveTest_Event(s"boost: on at \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
+        }
+        if speed > this.m_boostPeak {
+            this.m_boostPeak = speed;
+        }
+        if speed < 1.0 || speed >= this.m_boostLimit || elapsed <= 0.0 || elapsed > 0.1 {
+            return;
+        }
+        let acceleration = MinF(6.0 + percent * 0.1, 16.0);
+        let push = vehicle.GetTotalMass() * acceleration * elapsed;
+        let forward = vehicle.GetWorldForward();
+        let event = new PhysicalImpulseEvent();
+        event.radius = 1.0;
+        event.worldPosition = Vector4.Vector4To3(vehicle.GetWorldPosition());
+        event.worldImpulse = new Vector3(forward.X * push, forward.Y * push, forward.Z * push);
+        vehicle.QueueEvent(event);
+    }
+
+    private func EndBoost(reason: String) {
+        if this.m_boosting {
+            this.m_boosting = false;
+            WheelDriveTest_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
+        }
+    }
+
+    // Logged once, to look for a value for the car's real top speed.
+    private func ReportEngine(vehicle: ref<VehicleObject>) {
+        if this.m_reportedEngine {
+            return;
+        }
+        this.m_reportedEngine = true;
+        let record = vehicle.GetRecord().VehEngineDataHandle();
+        if !IsDefined(record) {
+            WheelDriveTest_Event("engine: no record");
+            return;
+        }
+        let cls = Reflection.GetClassOf(ToVariant(record), true);
+        for func in cls.GetFunctions() {
+            let type = func.GetReturnType();
+            let parameters = func.GetParameters();
+            if IsDefined(type) && ArraySize(parameters) == 0 && Equals(type.GetName(), n"Float") {
+                WheelDriveTest_Event(s"engine: \(NameToString(func.GetName())) = \(FloatToString(FromVariant<Float>(func.Call(record))))");
             }
         }
     }
@@ -372,11 +521,26 @@ public class WheelDriveTestService extends ScriptableService {
 
     private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
         this.m_steering = WheelDriveTest_Read();
+        if this.m_backHandledFrames > 0 {
+            this.m_backHandledFrames -= 1;
+        }
         this.UpdateScreen();
     }
 
     public func IsScreenOpen() -> Bool {
         return IsDefined(this.m_screen);
+    }
+
+    public func MarkBackHandled() {
+        this.m_backHandledFrames = 30;
+    }
+
+    public func TakeBackHandled() -> Bool {
+        if this.m_backHandledFrames > 0 {
+            this.m_backHandledFrames = 0;
+            return true;
+        }
+        return false;
     }
 
     public func SetMenuRoot(root: ref<inkWidget>) {
@@ -442,28 +606,35 @@ public class WheelDriveTestService extends ScriptableService {
         let content = new inkCanvas();
         content.SetAnchor(inkEAnchor.TopCenter);
         content.SetAnchorPoint(0.5, 0.0);
-        content.SetSize(new Vector2(2000.0, 1400.0));
-        content.SetMargin(new inkMargin(0.0, 60.0, 0.0, 0.0));
+        content.SetSize(new Vector2(2640.0, 1400.0));
+        content.SetMargin(new inkMargin(0.0, 50.0, 0.0, 0.0));
         content.Reparent(page);
 
-        this.AddText(content, heading, 56, 0.0, 0.0, 2000.0, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
+        this.AddText(content, heading, 56, 0.0, 0.0, 2640.0, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
 
         ArrayClear(this.m_rowValues);
         ArrayClear(this.m_rowMarks);
         let count = WheelDriveTest_ScreenRowCount();
+        let boostRow = WheelDriveTest_ScreenBoostRow();
+        let columnY: array<Float>;
+        ArrayPush(columnY, 100.0);
+        ArrayPush(columnY, 100.0);
+        let columnW = 1280.0;
         let row = 0;
-        let y = 100.0;
         while row < count {
+            let column = WheelDriveTest_ScreenColumn(row);
+            let x = Cast<Float>(column) * (columnW + 80.0);
+            let y = columnY[column];
             let section = WheelDriveTest_ScreenSection(row);
             if StrLen(section) > 0 {
                 y += 16.0;
-                let band = this.AddRect(content, 0.0, y, 2000.0, 66.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
+                let band = this.AddRect(content, x, y, columnW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
                 band.SetOpacity(0.9);
-                this.AddRect(content, 0.0, y, 2000.0, 3.0, this.Teal());
-                this.AddText(content, body, 40, 20.0, y, 1000.0, 66.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText(section);
-                y += 74.0;
+                this.AddRect(content, x, y, columnW, 3.0, this.Teal());
+                this.AddText(content, body, 38, x + 20.0, y, columnW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText(section);
+                y += 70.0;
             }
-            let mark = this.AddRect(content, 0.0, y, 2000.0, 70.0, this.Red());
+            let mark = this.AddRect(content, x, y, columnW, 68.0, this.Red());
             mark.SetOpacity(0.03);
             mark.SetName(StringToName(IntToString(row)));
             mark.SetInteractive(true);
@@ -471,21 +642,45 @@ public class WheelDriveTestService extends ScriptableService {
             mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
             ArrayPush(this.m_rowMarks, mark);
 
-            this.AddText(content, body, 38, 30.0, y, 1000.0, 70.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
+            this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
 
-            let boxX = 1050.0;
-            let boxW = 900.0;
+            let boxX = x + 640.0;
+            let boxW = 620.0;
             this.AddRect(content, boxX, y + 6.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 62.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 6.0, 2.0, 58.0, this.Red());
-            this.AddRect(content, boxX + boxW - 2.0, y + 6.0, 2.0, 58.0, this.Red());
-            ArrayPush(this.m_rowValues, this.AddText(content, body, 36, boxX, y, boxW, 70.0, this.Teal(), true));
-            y += 74.0;
+            this.AddRect(content, boxX, y + 60.0, boxW, 2.0, this.Red());
+            this.AddRect(content, boxX, y + 6.0, 2.0, 56.0, this.Red());
+            this.AddRect(content, boxX + boxW - 2.0, y + 6.0, 2.0, 56.0, this.Red());
+            ArrayPush(this.m_rowValues, this.AddText(content, body, 34, boxX, y, boxW, 68.0, this.Teal(), true));
+            y += 72.0;
+
+            if row == boostRow {
+                this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText("Boost strength");
+                let down = this.AddRect(content, boxX, y + 6.0, 70.0, 56.0, this.Red());
+                down.SetOpacity(0.35);
+                down.SetInteractive(true);
+                down.RegisterToCallback(n"OnRelease", this, n"OnBoostDown");
+                this.AddText(content, body, 40, boxX, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("-");
+                let up = this.AddRect(content, boxX + boxW - 70.0, y + 6.0, 70.0, 56.0, this.Red());
+                up.SetOpacity(0.35);
+                up.SetInteractive(true);
+                up.RegisterToCallback(n"OnRelease", this, n"OnBoostUp");
+                this.AddText(content, body, 40, boxX + boxW - 70.0, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("+");
+                let trackX = boxX + 80.0;
+                let trackW = boxW - 160.0;
+                let track = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Red());
+                track.SetOpacity(0.08);
+                this.m_boostFill = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Teal());
+                this.m_boostFill.SetOpacity(0.45);
+                this.m_boostValue = this.AddText(content, body, 34, trackX, y, trackW, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true);
+                y += 72.0;
+            }
+            columnY[column] = y;
             row += 1;
         }
 
-        this.m_status = this.AddText(content, heading, 30, 0.0, y + 8.0, 2000.0, 50.0, this.Teal(), true);
-        this.m_hints = this.AddText(content, heading, 26, 0.0, y + 62.0, 2000.0, 44.0, this.Red(), true);
+        let bottom = MaxF(columnY[0], columnY[1]);
+        this.m_status = this.AddText(content, heading, 30, 0.0, bottom + 8.0, 2640.0, 50.0, this.Teal(), true);
+        this.m_hints = this.AddText(content, heading, 26, 0.0, bottom + 62.0, 2640.0, 44.0, this.Red(), true);
 
         this.m_screen = page;
         if IsDefined(this.m_menuRoot) {
@@ -507,6 +702,18 @@ public class WheelDriveTestService extends ScriptableService {
                 WheelDriveTest_Event(s"menu-function: \(NameToString(cls.GetName())).\(NameToString(func.GetName()))");
             }
             cls = cls.GetParent();
+        }
+    }
+
+    protected cb func OnBoostDown(event: ref<inkPointerEvent>) -> Bool {
+        if event.IsAction(n"click") {
+            WheelDriveTest_BoostAdjust(-1);
+        }
+    }
+
+    protected cb func OnBoostUp(event: ref<inkPointerEvent>) -> Bool {
+        if event.IsAction(n"click") {
+            WheelDriveTest_BoostAdjust(1);
         }
     }
 
@@ -534,6 +741,8 @@ public class WheelDriveTestService extends ScriptableService {
             this.m_screen = null;
             this.m_status = null;
             this.m_hints = null;
+            this.m_boostValue = null;
+            this.m_boostFill = null;
             ArrayClear(this.m_rowValues);
             ArrayClear(this.m_rowMarks);
             if IsDefined(this.m_menuRoot) {
@@ -574,6 +783,9 @@ public class WheelDriveTestService extends ScriptableService {
             }
             row += 1;
         }
+        let percent = WheelDriveTest_BoostPercent();
+        this.m_boostValue.SetText(s"\(percent)%");
+        this.m_boostFill.SetSize(new Vector2(460.0 * Cast<Float>(percent) / 100.0, 56.0));
         this.m_status.SetText(WheelDriveTest_ScreenStatus());
         this.m_hints.SetText(WheelDriveTest_ScreenHints());
     }

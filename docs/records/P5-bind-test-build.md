@@ -140,6 +140,18 @@ Approved by the user; files replaced and hash-checked. About 20 minutes, with a 
 - **Sections:** the user wrote "Selections look correct", which may mean sections.
 - **Slow walking:** the user reports V walks very slowly and standing up after leaving the car. No function fired in any on-foot second of the log. The game maps its `ToggleWalk` action to the G key (SRC-032), and G is also the keyboard's Autodrive key in a vehicle. The user reports that pressing G on foot fixes it, so this was the game's walk toggle and not a mod fault. How the toggle got set was not established. Help text could warn about G, since it does different things in and out of a car.
 
+## Fifth build: going back, Autodrive, more controls and a boost test
+
+Plugin 0.14.0. `wd_game.dll` SHA-256 `b49b2194d904850ced5c72245112dbd9ee87c29f2d294dbf0670eef368f93f04`; `WheelDriveLoadTest.reds` SHA-256 `4a53f9f0ae86a1774d77d9f5291c6fab4a3b76df116a372c11894388319d4b40`. Staged in `out/boost-test/`. Not run in the game.
+
+- **Going back.** Also wraps `MenuScenario_PauseMenu.OnClosePauseMenu` and `gameuiMenuGameController.OnBack`, which refuse once after the page handled back. The log shows which one, if either, stops the menu closing.
+- **Autodrive.** The wheel's steering and pedals stop applying while the vehicle blackboard's `IsAutopilotOn` is true, and buttons still work. The log records each change. Whether this flag follows the game's Autodrive is unproven.
+- **Page.** Two columns: Driving and Other on the left, Camera and Radio on the right.
+- **New functions.** Reset camera (left stick press, shared with Autodrive, which the game treats as a hold), zoom in and out (D-pad up and down), scanner (left shoulder) and pause menu (Start). All from the game's mappings (SRC-032), except that the Start pairing was inferred from a tutorial action and needs checking.
+- **Boost.** See `docs/decisions/D23-boost-test.md`, with a strength slider worked by mouse or the Left and Right keys.
+
+Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-Fix going back, decide the Autodrive handling and choose a steering speed.
+With the user's approval, install and test going back, Autodrive, the new functions and boost.

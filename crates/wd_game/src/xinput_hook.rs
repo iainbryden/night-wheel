@@ -14,6 +14,8 @@ use windows::Win32::UI::Input::XboxController::{
 use windows::core::{s, w};
 
 const ERROR_SUCCESS: u32 = 0;
+/// A brake value at or above this ends boost. Provisional, about a tenth of its travel.
+const BOOST_BRAKE_LIMIT: u8 = 26;
 /// The only controller slot the wheel uses.
 const WHEEL_USER: u32 = 0;
 
@@ -81,10 +83,14 @@ unsafe extern "C" fn get_state_detour(
     let mut output = pad;
     let may_apply = shared::wheel_may_apply();
     let buttons = state.Gamepad.wButtons.0 | shared::pad_buttons(may_apply);
-    if may_apply && let Some(config) = shared::PROFILE.get() {
+    if may_apply
+        && !shared::autopilot()
+        && let Some(config) = shared::PROFILE.get()
+    {
         output = drive::merge(pad, drive::output(config, shared::raw_axes()));
         shared::record_applied(output.thumb_x);
     }
+    shared::set_brake_clear(output.left_trigger < BOOST_BRAKE_LIMIT);
     state.Gamepad.sThumbLX = output.thumb_x;
     state.Gamepad.bLeftTrigger = output.left_trigger;
     state.Gamepad.bRightTrigger = output.right_trigger;

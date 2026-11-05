@@ -196,6 +196,7 @@ mod tests {
             throttle: pedal,
             brake: pedal,
             bindings: Bindings::default(),
+            boost_percent: 25,
         }
     }
 
