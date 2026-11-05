@@ -103,8 +103,16 @@ The game's action now reaches usable values across the wheel's range, but runs r
 
 `action_delay` was commonly at most 8 ms and nearly always at most 16 ms. Its worst was 1.96 s. That has not been explained; the steering action may not report during a pause or menu, which would count that whole gap. It needs separating from driving time before it is relied on.
 
-The user's report on feel: pending.
+User's report on feel:
+
+- The dead spot is gone.
+- Steering is sluggish: on a quick turn, the car's wheel turns slowly.
+- With the car parked, the tires reached full lock at about 45° of wheel turn, with about a full turn of the wheel still available.
+
+The user's G HUB screen shows the "Cyberpunk 2077: Default" profile with **Operating Range 180**, Sensitivity 50, and Centering Spring 20 and off. Earlier reasoning here assumed about 450° each way, which was wrong. At 180°, the wheel's full reported range covers only 90° each way, so 45° is about half of the range and wheel movement past 90° is expected to report nothing further. This accounts for much of the early lock. It is inferred from the setting, and has not been measured with another range. Who set that value is unknown.
+
+The mod cannot assume an operating range. Setup must tell the player about this setting, and the mod's steering feel depends on it.
 
 ## Next step
 
-Get the user's report on feel. Then refine the constants, and decide whether the rate settings need changing.
+The user sets the operating range in G HUB and drives again. Then refine the constants, and test the steering rate settings if quick turns are still slow.
