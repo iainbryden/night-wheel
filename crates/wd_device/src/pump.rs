@@ -3,6 +3,7 @@
 use crate::device::{Change, Device};
 use std::collections::BTreeMap;
 use std::mem::size_of;
+use std::time::Instant;
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::{
@@ -30,7 +31,10 @@ pub enum Event<'a> {
     Disconnected(&'a Device),
     Report {
         device: &'a Device,
+        /// Always empty under [`run_values_only`].
         changes: &'a [Change],
+        /// When this thread began handling the report.
+        received: Instant,
     },
     /// Fires at the rate given to [`run`], whether or not anything changed.
     Tick(&'a Devices),
@@ -77,8 +81,31 @@ pub fn enumerate() -> Result<Devices, String> {
 /// Runs on the calling thread until `handler` returns [`Flow::Stop`], then returns the
 /// final device state. Call this only once per process, because it registers a window class.
 pub fn run(tick_ms: u32, mut handler: impl FnMut(Event<'_>) -> Flow) -> Result<Devices, String> {
+    run_with(Decode::Full, tick_ms, &mut handler)
+}
+
+/// Like [`run`], but decodes only value controls and allocates nothing per report.
+/// Reports are handled as they arrive; the tick does not delay them.
+pub fn run_values_only(
+    tick_ms: u32,
+    mut handler: impl FnMut(Event<'_>) -> Flow,
+) -> Result<Devices, String> {
+    run_with(Decode::ValuesOnly, tick_ms, &mut handler)
+}
+
+#[derive(Clone, Copy)]
+enum Decode {
+    Full,
+    ValuesOnly,
+}
+
+fn run_with(
+    decode: Decode,
+    tick_ms: u32,
+    handler: &mut impl FnMut(Event<'_>) -> Flow,
+) -> Result<Devices, String> {
     let window = create_window()?;
-    let result = message_loop(window, tick_ms, &mut handler);
+    let result = message_loop(window, decode, tick_ms, handler);
     // SAFETY: `window` was created above on this thread and is not used after this.
     let _ = unsafe { DestroyWindow(window) };
     result
@@ -86,6 +113,7 @@ pub fn run(tick_ms: u32, mut handler: impl FnMut(Event<'_>) -> Flow) -> Result<D
 
 fn message_loop(
     window: HWND,
+    decode: Decode,
     tick_ms: u32,
     handler: &mut impl FnMut(Event<'_>) -> Flow,
 ) -> Result<Devices, String> {
@@ -109,7 +137,7 @@ fn message_loop(
         }
         match message.message {
             WM_INPUT => {
-                handle_input(message.lParam, &mut buffer, &mut devices, handler)?;
+                handle_input(message.lParam, decode, &mut buffer, &mut devices, handler)?;
             }
             WM_INPUT_DEVICE_CHANGE => {
                 handle_device_change(message.wParam, message.lParam, &mut devices, handler);
@@ -132,10 +160,12 @@ fn message_loop(
 
 fn handle_input(
     lparam: LPARAM,
+    decode: Decode,
     buffer: &mut Vec<u64>,
     devices: &mut Devices,
     handler: &mut impl FnMut(Event<'_>) -> Flow,
 ) -> Result<(), String> {
+    let received = Instant::now();
     let handle = HRAWINPUT(lparam.0 as *mut _);
     let header_size = size_of::<RAWINPUTHEADER>() as u32;
     let mut size = 0u32;
@@ -191,10 +221,17 @@ fn handle_input(
         std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u8>().add(offset), total)
     };
     for report in bytes.chunks_exact_mut(report_size) {
-        let changes = device.apply_report(report);
+        let changes = match decode {
+            Decode::Full => device.apply_report(report),
+            Decode::ValuesOnly => {
+                device.apply_values(report);
+                Vec::new()
+            }
+        };
         handler(Event::Report {
             device,
             changes: &changes,
+            received,
         });
     }
     Ok(())

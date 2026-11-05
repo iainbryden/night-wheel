@@ -194,6 +194,23 @@ impl Device {
         )
     }
 
+    /// The current value of a control, when it has reported one.
+    pub fn value(&self, page: u16, usage: u16) -> Option<i64> {
+        self.values
+            .iter()
+            .find(|control| control.page == page && control.usage == usage)
+            .and_then(|control| control.current)
+    }
+
+    /// Decodes only value controls and allocates nothing, for the low-latency path.
+    pub fn apply_values(&mut self, report: &mut [u8]) {
+        self.reports += 1;
+        let parsed = PHIDP_PREPARSED_DATA(self.preparsed.as_ptr() as isize);
+        for control in &mut self.values {
+            decode_value(control, parsed, report);
+        }
+    }
+
     /// Decodes one input report and returns what changed.
     pub fn apply_report(&mut self, report: &mut [u8]) -> Vec<Change> {
         self.reports += 1;
@@ -201,36 +218,15 @@ impl Device {
         let mut changes = Vec::new();
 
         for control in &mut self.values {
-            let mut raw = 0u32;
-            // SAFETY: `parsed` and `report` are valid for the duration of the call.
-            let status = unsafe {
-                HidP_GetUsageValue(
-                    HidP_Input,
-                    control.page,
-                    Some(control.link),
-                    control.usage,
-                    &mut raw,
-                    parsed,
-                    report,
-                )
-            };
-            // A device with several report IDs only carries some controls per report.
-            if status != HIDP_STATUS_SUCCESS {
-                continue;
-            }
-            let min = i32::try_from(control.logical_min).unwrap_or(0);
-            let Some(value) = decode_logical(raw, control.bit_size, min) else {
-                continue;
-            };
-            if control.current != Some(value) {
-                control.current = Some(value);
+            let before = control.current;
+            if let Some(value) = decode_value(control, parsed, report)
+                && before != Some(value)
+            {
                 changes.push(Change::Value {
                     name: usage_name(control.page, control.usage),
                     value,
                 });
             }
-            control.lowest = Some(control.lowest.map_or(value, |low| low.min(value)));
-            control.highest = Some(control.highest.map_or(value, |high| high.max(value)));
         }
 
         let mut held = BTreeSet::new();
@@ -277,6 +273,37 @@ impl Device {
         }
         changes
     }
+}
+
+/// Updates one control from a report. Returns its value when the report carried it.
+fn decode_value(
+    control: &mut ValueControl,
+    parsed: PHIDP_PREPARSED_DATA,
+    report: &mut [u8],
+) -> Option<i64> {
+    let mut raw = 0u32;
+    // SAFETY: `parsed` and `report` are valid for the duration of the call.
+    let status = unsafe {
+        HidP_GetUsageValue(
+            HidP_Input,
+            control.page,
+            Some(control.link),
+            control.usage,
+            &mut raw,
+            parsed,
+            report,
+        )
+    };
+    // A device with several report IDs only carries some controls per report.
+    if status != HIDP_STATUS_SUCCESS {
+        return None;
+    }
+    let min = i32::try_from(control.logical_min).unwrap_or(0);
+    let value = decode_logical(raw, control.bit_size, min)?;
+    control.current = Some(value);
+    control.lowest = Some(control.lowest.map_or(value, |low| low.min(value)));
+    control.highest = Some(control.highest.map_or(value, |high| high.max(value)));
+    Some(value)
 }
 
 fn device_info(handle: HANDLE) -> Result<RID_DEVICE_INFO, String> {

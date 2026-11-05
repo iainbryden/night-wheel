@@ -1,49 +1,49 @@
-//! Counts wheel reports on a background thread and logs a summary once a second. Read-only.
+//! Reads the wheel on its own thread as reports arrive. Read-only. Nothing on the per-report
+//! path locks, allocates or touches a file.
 
-use crate::log_file;
+use crate::{log_file, shared};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use wd_device::pump::{Event, Flow, run};
+use wd_device::pump::{Event, Flow, run_values_only};
 
-const SUMMARY_MS: u32 = 1000;
+/// Only used to notice a stop request. Reports do not wait for it.
+const STOP_CHECK_MS: u32 = 250;
 const STOP_WAIT: Duration = Duration::from_millis(1500);
 const STOP_POLL: Duration = Duration::from_millis(20);
+
+const GENERIC_DESKTOP_PAGE: u16 = 0x01;
+/// HID X. Taken as steering for this test; individual controls are still unconfirmed.
+const X_USAGE: u16 = 0x30;
 
 pub struct WheelReader {
     stop: Arc<AtomicBool>,
     thread: JoinHandle<()>,
 }
 
-fn summary(reports: u64, paused: bool) -> Option<String> {
-    (reports > 0).then(|| format!("wheel reports={reports} paused={paused}"))
-}
-
 impl WheelReader {
-    pub fn start(paused: &'static AtomicBool) -> Self {
+    pub fn start() -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
         let thread = std::thread::spawn(move || {
-            let mut reports = 0u64;
-            let result = run(SUMMARY_MS, |event| {
+            let result = run_values_only(STOP_CHECK_MS, |event| {
                 match event {
+                    Event::Report {
+                        device, received, ..
+                    } => {
+                        if device.is_observed_target() {
+                            let steering = device.value(GENERIC_DESKTOP_PAGE, X_USAGE);
+                            shared::record_report(steering, received);
+                        }
+                    }
                     Event::Connected(device) => {
-                        log_file::write(&format!("controller connected {}", device.label()));
+                        log_file::send(format!("controller connected {}", device.label()));
                     }
                     Event::Disconnected(device) => {
-                        log_file::write(&format!("controller disconnected {}", device.label()));
-                    }
-                    Event::Report { device, .. } => {
-                        if device.is_observed_target() {
-                            reports += 1;
-                        }
+                        log_file::send(format!("controller disconnected {}", device.label()));
                     }
                     Event::Tick(_) => {
-                        if let Some(line) = summary(reports, paused.load(Ordering::Relaxed)) {
-                            log_file::write(&line);
-                        }
-                        reports = 0;
                         if thread_stop.load(Ordering::Relaxed) {
                             return Flow::Stop;
                         }
@@ -52,7 +52,7 @@ impl WheelReader {
                 Flow::Continue
             });
             if let Err(problem) = result {
-                log_file::write(&format!("wheel reading stopped: {problem}"));
+                log_file::send(format!("wheel reading stopped: {problem}"));
             }
         });
         Self { stop, thread }
@@ -68,25 +68,7 @@ impl WheelReader {
         if self.thread.is_finished() {
             let _ = self.thread.join();
         } else {
-            log_file::write("wheel thread did not stop in time");
+            log_file::send("wheel thread did not stop in time".to_owned());
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::summary;
-
-    #[test]
-    fn quiet_seconds_write_nothing() {
-        assert_eq!(summary(0, false), None);
-    }
-
-    #[test]
-    fn a_summary_records_count_and_pause_state() {
-        assert_eq!(
-            summary(57, true).as_deref(),
-            Some("wheel reports=57 paused=true")
-        );
     }
 }

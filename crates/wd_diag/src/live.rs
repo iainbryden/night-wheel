@@ -58,7 +58,9 @@ pub fn run(seconds: Option<u32>, plain: bool) -> Result<(), String> {
         match event {
             Event::Connected(device) if plain => println!("connected: {}", device.label()),
             Event::Disconnected(device) if plain => println!("disconnected: {}", device.label()),
-            Event::Report { device, changes } if plain => print_changes(device, changes),
+            Event::Report {
+                device, changes, ..
+            } if plain => print_changes(device, changes),
             Event::Tick(devices) => {
                 if !plain {
                     draw(devices);
