@@ -131,6 +131,15 @@ Using the game's own widgets would look the most native. Public docs (SRC-043) c
 
 Checks: lints clean, 143 of 143 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Fourth build's game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. About 20 minutes, with a clean shutdown and no new crash report.
+
+- **Radio:** next, previous, on/off and volume all logged working values. Next changed the station index in order 14, 3, 7, and previous stepped back through 3, 14, 2. Volume moved by 5, between 55 and 90.
+- **Other functions:** handbrake, look behind, change camera, radio menu and combat mode fired. What the game did with them has not been reported.
+- **Sections:** the user wrote "Selections look correct", which may mean sections.
+- **Slow walking:** the user reports V walks very slowly and standing up after leaving the car. No function fired in any on-foot second of the log. The game maps its `ToggleWalk` action to the G key (SRC-032), and G is also the keyboard's Autodrive key in a vehicle. So a G press on foot is a candidate, along with the mod's constant gamepad presence, a walk-only area and status effects. Not established.
+
 ## Next step
 
-With the user's approval, install. The user binds the requested set and tests it in a car.
+The user tries G on foot at the next launch. Then fix going back, decide the Autodrive handling and choose a steering speed.
