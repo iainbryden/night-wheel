@@ -40,7 +40,7 @@ static POLL_AGE: Histogram = Histogram::new();
 static ACTION_DELAY: Histogram = Histogram::new();
 
 /// Number of stick ranges in the stick-to-action table.
-const CURVE_BUCKETS: usize = 21;
+const CURVE_BUCKETS: usize = 41;
 /// Marks a table entry with no observation.
 const NO_VALUE: u32 = u32::MAX;
 static CURVE: [AtomicU32; CURVE_BUCKETS] = [const { AtomicU32::new(NO_VALUE) }; CURVE_BUCKETS];

@@ -36,6 +36,55 @@ Source checkpoint and hashes: branch `game-load-test`; release `wd_game.dll` SHA
 - The table keeps only the latest value for each range, so the wheel must be swept slowly across its range.
 - A game autosave can still occur during the run.
 
+## Game run, 2026-11-04
+
+Approved by the user; saves backed up to `out/game-before/saves-before-report`, files replaced and hash-checked. No crash, clean exit, no save changed; only `user.gls` changed. The full report is kept locally at `out/game-before/report-dump.txt`.
+
+### Stick value to game action
+
+| Stick position | `TurnX` |
+|---|---|
+| 0.19 to 0.38 | 0.000 |
+| 0.48 | 0.153 |
+| 0.57 | 0.338 |
+| 0.67 | 0.499 |
+| 0.76 | 0.667 |
+| 0.86 | 0.877 |
+| 0.95 | 1.000 |
+
+The negative side is close to a mirror of this. Each row is the latest value seen in a range about 0.095 wide. A straight line through these points leaves zero at about 0.40 and reaches full at about 0.93.
+
+**So the first 40% or so of stick travel does nothing in each direction.** That sits alongside the `Preset_Vehicle` deadzone entry in `inputDeadzones.xml` (`bCoeff` 0.4), although that link is inferred. With a wheel mapped straight across, this is a dead band around centre, then a steeper response. It fits the user's report of delayed response when turning.
+
+### Delay
+
+Stick value change to next `TurnX` report: commonly at most 8 ms, nearly always at most 16 ms, worst 28 ms, over 1,313 changes. This fits one polling cycle, with no large delay in this part of the path. It does not cover the path from `TurnX` to the car's wheels.
+
+### Vehicle drive settings, for the vehicle driven
+
+| Setting | Value |
+|---|---|
+| `MaxWheelTurnDeg` | 50 |
+| `WheelTurnMaxAddPerSecond` | 95 |
+| `WheelTurnMaxSubPerSecond` | 128 |
+| `UseAlternativeTurnUpdate` | true |
+| `TurnUpdateInputSlowChangeSpeed` / `FastChangeSpeed` | 0.1 / 1.0 |
+| `TurnUpdateInputDiffForSlowChange` / `ForFastChange` | 0 / 1 |
+| `TurnUpdateInputDiffProgressionPow` | 0.8 |
+| `TurnUpdateBaseSpeedThreshold` / `Mid` / `Max` | 10 / 0 / 25 |
+| `TurnUpdateMidSpeedTurnMul` / `MaxSpeedTurnMul` | 0.5 / 0.45 |
+| `TurnUpdateMidSpeedTurnChangeMul` / `MaxSpeedTurnChangeMul` | 1.25 / 2.7 |
+
+These names suggest the game limits how fast the wheels turn, and scales turning with speed. If the units are degrees and seconds, 95 per second over 50 degrees would take about half a second to reach full lock. **Units and meaning are inferred from names, and their effect has not been tested.** Other vehicles may differ. Limits like these could explain why the car's wheel lags the physical wheel, and could remain after the deadzone fix.
+
+## Fix built: deadzone compensation
+
+`drive.rs` now maps wheel position past the dead range: zero stays exactly zero, other values start at 0.40 of stick travel and rise to 0.93, and full lock sends full stick. It adds one small calculation at poll time and changes no game file.
+
+Plugin 0.5.0 `wd_game.dll` SHA-256 is recorded in `evidence/TEST_RESULTS.csv`. The script is unchanged. The stick-to-action table now has 41 ranges, to check the result.
+
+The two constants are measured on one run and one vehicle, and depend on the game's settings. They need rechecking after patches.
+
 ## Next step
 
-Get approval to replace the two test files. Back up saves again before the run.
+Get approval to replace the plugin, then test how steering feels and read the new table. If steering still lags, consider adjusting the rate settings in game data as a separate decision.

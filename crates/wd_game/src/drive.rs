@@ -14,6 +14,26 @@ pub struct Output {
     pub right_trigger: u8,
 }
 
+/// Where the game's steering action leaves zero and reaches full, as a fraction of stick travel.
+/// Measured from the game's `TurnX` action on patch 2.5; see docs/records/P3-steering-report-build.md.
+const STICK_DEAD_END: f64 = 0.40;
+const STICK_FULL: f64 = 0.93;
+
+/// Undoes the game's vehicle deadzone, so wheel position maps straight to the game's action.
+/// Zero stays exactly zero. Any other intent starts at the edge of the dead range.
+fn compensate(intent: f64) -> f64 {
+    if intent == 0.0 {
+        return 0.0;
+    }
+    let size = intent.abs().min(1.0);
+    let stick = if size >= 1.0 {
+        1.0
+    } else {
+        STICK_DEAD_END + (STICK_FULL - STICK_DEAD_END) * size
+    };
+    stick.copysign(intent)
+}
+
 /// Steering intent, -1.0..=1.0, to a stick value. Centre is exactly 0.
 fn to_thumb(intent: f64) -> i16 {
     (intent.clamp(-1.0, 1.0) * f64::from(i16::MAX)).round() as i16
@@ -29,7 +49,9 @@ fn to_trigger(intent: f64) -> u8 {
 /// read as a fully pressed pedal.
 pub fn output(config: &Config, [steering, throttle, brake]: [Option<i32>; 3]) -> Output {
     Output {
-        thumb_x: steering.map_or(0, |raw| to_thumb(config.steering.normalize(raw))),
+        thumb_x: steering.map_or(0, |raw| {
+            to_thumb(compensate(config.steering.normalize(raw)))
+        }),
         right_trigger: throttle.map_or(0, |raw| to_trigger(config.throttle.normalize(raw))),
         left_trigger: brake.map_or(0, |raw| to_trigger(config.brake.normalize(raw))),
     }
@@ -110,6 +132,31 @@ mod tests {
         assert_eq!(result.thumb_x, i16::MAX);
         assert_eq!(result.right_trigger, u8::MAX);
         assert_eq!(result.left_trigger, 0);
+    }
+
+    #[test]
+    fn compensation_keeps_centre_and_full_lock() {
+        assert_eq!(compensate(0.0), 0.0);
+        assert_eq!(compensate(1.0), 1.0);
+        assert_eq!(compensate(-1.0), -1.0);
+    }
+
+    #[test]
+    fn small_turns_start_at_the_edge_of_the_dead_range() {
+        assert!(compensate(0.001) >= STICK_DEAD_END);
+        assert!(compensate(0.001) < STICK_DEAD_END + 0.01);
+    }
+
+    #[test]
+    fn compensation_rises_steadily_and_is_symmetric() {
+        let mut previous = 0.0;
+        for step in 1..=100 {
+            let intent = f64::from(step) / 100.0;
+            let stick = compensate(intent);
+            assert!(stick > previous);
+            assert_eq!(compensate(-intent), -stick);
+            previous = stick;
+        }
     }
 
     #[test]
