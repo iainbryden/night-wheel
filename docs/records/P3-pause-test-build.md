@@ -95,7 +95,9 @@ Approved by the user; script replaced and hash-checked. G HUB open; Resolve, Cur
 | Does the refresh run during pause? | **Yes** | 45 to 76 reads per second, median 62, in all 50 paused seconds; the previous script read in only 2 of 21 |
 | Are wheel reports read during pause? | **Yes** | 5,186 reports while paused |
 | Does the wheel stay readable? | Yes, this run | No disconnect logged; `PID_C24F` afterward |
-| Does X visibly follow the wheel? | Awaiting the user | The log shows reads and new reports together, but not what was on screen |
+| Does X visibly follow the wheel? | **Yes** | User report: wheel and keys showed values on screen |
+| Did the game feel laggy? | No | User report, with heavy apps closed. Not measured, so this does not establish that those apps caused the earlier lag |
+| Cable or power touched? | No | User report |
 
 Timing:
 
@@ -112,4 +114,4 @@ Frame rate was not measured directly, and scene and G HUB state differ between r
 
 ## Next step
 
-Get the user's visual result, then research the game's vehicle input path, using the measured update interval as the latency baseline.
+Research the game's vehicle input path, using the measured update interval as the latency baseline.
