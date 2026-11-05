@@ -12,27 +12,54 @@ use wd_core::listen::{ButtonListener, LISTEN_TIMEOUT_MS, ListenOutcome};
 const BUTTON_PAGE: u16 = 0x09;
 
 // Gamepad button values from Microsoft's XINPUT_GAMEPAD documentation.
-const PAD_DPAD_LEFT: u16 = 0x0004;
-const PAD_DPAD_RIGHT: u16 = 0x0008;
-const PAD_LEFT_THUMB: u16 = 0x0040;
-const PAD_RIGHT_SHOULDER: u16 = 0x0200;
-const PAD_A: u16 = 0x1000;
-const PAD_B: u16 = 0x2000;
-const PAD_X: u16 = 0x4000;
-const PAD_Y: u16 = 0x8000;
+const PAD_DPAD_LEFT: u32 = 0x0004;
+const PAD_DPAD_RIGHT: u32 = 0x0008;
+const PAD_LEFT_THUMB: u32 = 0x0040;
+const PAD_RIGHT_THUMB: u32 = 0x0080;
+const PAD_RIGHT_SHOULDER: u32 = 0x0200;
+const PAD_A: u32 = 0x1000;
+const PAD_B: u32 = 0x2000;
+const PAD_X: u32 = 0x4000;
+const PAD_Y: u32 = 0x8000;
 
-/// The functions on the screen and the gamepad button each one presses. The pairs come from the
+// Functions with no gamepad button, which the game script carries out once per press. These sit
+// above the gamepad bits. The script reads them shifted down by `SCRIPT_SHIFT`.
+pub const SCRIPT_SHIFT: u32 = 16;
+const SCRIPT_RADIO_TOGGLE: u32 = 1 << SCRIPT_SHIFT;
+const SCRIPT_RADIO_NEXT: u32 = 2 << SCRIPT_SHIFT;
+const SCRIPT_RADIO_PREVIOUS: u32 = 4 << SCRIPT_SHIFT;
+const SCRIPT_VOLUME_UP: u32 = 8 << SCRIPT_SHIFT;
+const SCRIPT_VOLUME_DOWN: u32 = 16 << SCRIPT_SHIFT;
+
+/// The functions on the screen and how each one reaches the game. Gamepad pairs come from the
 /// game's `inputContexts.xml` and `inputUserMappings.xml` on patch 2.5 (SRC-032).
-pub const ROWS: [(Action, u16); 8] = [
+pub const ROWS: [(Action, u32); 14] = [
     (Action::Handbrake, PAD_A),
     (Action::Horn, PAD_X),
     (Action::Lights, PAD_DPAD_LEFT),
     (Action::CameraChange, PAD_DPAD_RIGHT),
+    (Action::RearView, PAD_RIGHT_THUMB),
     (Action::VehicleExit, PAD_B),
     (Action::Autodrive, PAD_LEFT_THUMB),
-    (Action::RadioMenu, PAD_RIGHT_SHOULDER),
     (Action::CombatMode, PAD_Y),
+    (Action::RadioMenu, PAD_RIGHT_SHOULDER),
+    (Action::RadioToggle, SCRIPT_RADIO_TOGGLE),
+    (Action::RadioNext, SCRIPT_RADIO_NEXT),
+    (Action::RadioPrevious, SCRIPT_RADIO_PREVIOUS),
+    (Action::RadioVolumeUp, SCRIPT_VOLUME_UP),
+    (Action::RadioVolumeDown, SCRIPT_VOLUME_DOWN),
 ];
+
+/// Where each section starts on the page, and its title.
+const SECTIONS: [(usize, &str); 2] = [(0, "Driving"), (8, "Radio")];
+
+/// The title of the section that starts at a row, if one does.
+pub fn section_at(row: usize) -> &'static str {
+    SECTIONS
+        .iter()
+        .find(|(start, _)| *start == row)
+        .map_or("", |(_, title)| title)
+}
 
 /// How long a row stays lit after its control is pressed, so a dial click can be seen.
 const LIT_MS: u64 = 300;
@@ -62,7 +89,7 @@ impl Command {
 }
 
 /// The saved names of the functions whose gamepad buttons are in `flags`, for the log.
-pub fn fired_names(flags: u16) -> String {
+pub fn fired_names(flags: u32) -> String {
     let names: Vec<&str> = ROWS
         .iter()
         .filter(|(_, flag)| flags & flag != 0)
@@ -508,15 +535,38 @@ mod tests {
     }
 
     #[test]
+    fn sections_start_where_they_should() {
+        assert_eq!(section_at(0), "Driving");
+        assert_eq!(section_at(8), "Radio");
+        assert_eq!(section_at(1), "");
+        assert_eq!(ROWS[8].0, Action::RadioMenu);
+    }
+
+    #[test]
+    fn every_route_has_one_bit_and_gamepad_routes_fit_a_gamepad() {
+        for (_, route) in ROWS {
+            assert_eq!(route.count_ones(), 1);
+        }
+        let pad_only: u32 = ROWS
+            .iter()
+            .filter(|(action, _)| *action == Action::Handbrake)
+            .map(|(_, route)| *route)
+            .sum();
+        assert_eq!(pad_only >> SCRIPT_SHIFT, 0);
+        assert_eq!(SCRIPT_RADIO_TOGGLE >> SCRIPT_SHIFT, 1);
+    }
+
+    #[test]
     fn fired_functions_are_named_for_the_log() {
         assert_eq!(fired_names(0), "none");
         assert_eq!(fired_names(PAD_X), "horn");
         assert_eq!(fired_names(PAD_A | PAD_X), "handbrake,horn");
+        assert_eq!(fired_names(SCRIPT_VOLUME_UP), "radio_volume_up");
     }
 
     #[test]
     fn every_function_presses_a_different_gamepad_button() {
-        let flags: BTreeSet<u16> = ROWS.iter().map(|(_, flag)| *flag).collect();
+        let flags: BTreeSet<u32> = ROWS.iter().map(|(_, flag)| *flag).collect();
         assert_eq!(flags.len(), ROWS.len());
     }
 

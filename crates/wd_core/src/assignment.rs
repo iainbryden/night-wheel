@@ -25,11 +25,15 @@ pub enum Action {
     Autodrive,
     RadioMenu,
     CombatMode,
+    RadioPrevious,
+    RadioToggle,
+    RadioVolumeUp,
+    RadioVolumeDown,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 20] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -46,6 +50,10 @@ impl Action {
         Self::Autodrive,
         Self::RadioMenu,
         Self::CombatMode,
+        Self::RadioPrevious,
+        Self::RadioToggle,
+        Self::RadioVolumeUp,
+        Self::RadioVolumeDown,
     ];
 
     /// Stable name used in saved settings. Do not change once released.
@@ -67,6 +75,10 @@ impl Action {
             Self::Autodrive => "autodrive",
             Self::RadioMenu => "radio_menu",
             Self::CombatMode => "combat_mode",
+            Self::RadioPrevious => "radio_previous",
+            Self::RadioToggle => "radio_toggle",
+            Self::RadioVolumeUp => "radio_volume_up",
+            Self::RadioVolumeDown => "radio_volume_down",
         }
     }
 
@@ -82,13 +94,17 @@ impl Action {
             Self::Lights => "Lights",
             Self::VehicleExit => "Exit vehicle",
             Self::CameraChange => "Change camera",
-            Self::RearView => "Rear view",
+            Self::RearView => "Look behind",
             Self::RadioNext => "Next radio station",
             Self::PauseMenu => "Pause menu",
             Self::ProfileNext => "Next profile",
             Self::Autodrive => "Autodrive",
-            Self::RadioMenu => "Radio",
+            Self::RadioMenu => "Radio menu",
             Self::CombatMode => "Combat mode",
+            Self::RadioPrevious => "Previous radio station",
+            Self::RadioToggle => "Radio on/off",
+            Self::RadioVolumeUp => "Radio volume up",
+            Self::RadioVolumeDown => "Radio volume down",
         }
     }
 

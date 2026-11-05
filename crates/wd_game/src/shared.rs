@@ -3,7 +3,7 @@
 
 use crate::drive;
 use crate::latency::{Histogram, Summary};
-use crate::settings::{self, ROWS};
+use crate::settings::{self, ROWS, SCRIPT_SHIFT};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
@@ -41,7 +41,11 @@ static PRESSED_FOR_POLL: AtomicU64 = AtomicU64::new(0);
 static PRESSED_FOR_SCREEN: AtomicU64 = AtomicU64::new(0);
 /// Controls that must be released before they count again.
 static WAITING: AtomicU64 = AtomicU64::new(0);
-/// Gamepad buttons the wheel has pressed since the last stats line.
+/// The controls that counted at the last poll, to find fresh presses.
+static LAST_COUNTED: AtomicU64 = AtomicU64::new(0);
+/// Fresh presses of functions the game script carries out, until it takes them.
+static SCRIPT_PENDING: AtomicU32 = AtomicU32::new(0);
+/// Functions the wheel has pressed since the last stats line.
 static FIRED: AtomicU32 = AtomicU32::new(0);
 /// The control bit bound to each settings row, or zero.
 static ROW_BITS: [AtomicU64; ROWS.len()] = [const { AtomicU64::new(0) }; ROWS.len()];
@@ -211,17 +215,32 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
     let waiting = WAITING.load(Ordering::Relaxed);
     let (counted, waiting) = drive::gate_controls(held, pressed, waiting, may_apply);
     WAITING.store(waiting, Ordering::Relaxed);
-    let flags = drive::pad_flags(
-        counted,
-        ROW_BITS
-            .iter()
-            .zip(ROWS)
-            .map(|(bit, (_, flag))| (bit.load(Ordering::Relaxed), flag)),
-    );
+    let routes = |controls| {
+        drive::route_flags(
+            controls,
+            ROW_BITS
+                .iter()
+                .zip(ROWS)
+                .map(|(bit, (_, route))| (bit.load(Ordering::Relaxed), route)),
+        )
+    };
+    let flags = routes(counted);
     if flags != 0 {
-        FIRED.fetch_or(u32::from(flags), Ordering::Relaxed);
+        FIRED.fetch_or(flags, Ordering::Relaxed);
     }
-    flags
+    let fresh = counted & !LAST_COUNTED.swap(counted, Ordering::Relaxed);
+    if fresh != 0 {
+        let scripted = routes(fresh) >> SCRIPT_SHIFT;
+        if scripted != 0 {
+            SCRIPT_PENDING.fetch_or(scripted, Ordering::Relaxed);
+        }
+    }
+    (flags & 0xFFFF) as u16
+}
+
+/// Called by the game script each frame while driving. The functions it should carry out now.
+pub fn take_script_actions() -> i32 {
+    SCRIPT_PENDING.swap(0, Ordering::Relaxed) as i32
 }
 
 /// Publishes bindings to the game's poll.
@@ -291,7 +310,7 @@ pub fn stats_line() -> Option<String> {
         PAUSED.load(Ordering::Relaxed),
         DRIVING.load(Ordering::Relaxed),
         WHEEL_CONNECTED.load(Ordering::Relaxed),
-        settings::fired_names(FIRED.swap(0, Ordering::Relaxed) as u16),
+        settings::fired_names(FIRED.swap(0, Ordering::Relaxed)),
         format_summary("decode", decode),
         format_summary("read_interval", interval),
         format_summary("value_age", age),

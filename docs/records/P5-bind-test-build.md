@@ -105,6 +105,32 @@ The decision is in `docs/decisions/D22-settings-page-input.md`. Plugin 0.12.0. `
 
 Checks: lints clean, 141 of 141 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Third build's game run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. No crash report, and the game was still open when the log was read.
+
+- **Going back failed.** The log shows `wheel-back`, then `session-resume` about 10 ms later. So the wrap runs, and the pause menu closes anyway.
+- **Circle bound** to Autodrive, so the game did not treat the wheel's Circle as back.
+- **Horn.** `fired=horn` appears in about 29 separate seconds, including after the user says it stopped. The user says it works once and returns after leaving and re-entering the car, and recalls this as a possible game bug. The user chose to skip the keyboard comparison, so the cause is not established.
+- **Autodrive.** The user hit something with it on, and the game did not crash. The wheel's steering and pedals still apply during Autodrive, which may be fighting it. This is not established.
+- **Handbrake.** The log shows it never fired in this run, though the user recalls it working. To be retried.
+
+## Fourth build: more functions and page sections
+
+Plugin 0.13.0. `wd_game.dll` SHA-256 `bbf5e3bbc4d4f38e0bb4ffcc4a654686def9d8652256028fef0f3d8a5b76cffc`; `WheelDriveLoadTest.reds` SHA-256 `86f2a9185db9a1609cd7ae76862bcad02526f0f3a693ace730ae4ac0bbc77a44`. Staged in `out/radio-test/`. Not run in the game.
+
+- **Look behind:** the game's `VehicleInverseCameraToggle`, on the right stick press (SRC-032). It may be a toggle.
+- **Radio:** on/off, next and previous station, and volume up and down, called by the game script once per press while driving. They use `ToggleRadioReceiver`, `NextRadioReceiverStation`, `SetRadioReceiverStation` and the `CarRadioVolume` setting. The names were checked only by compiling, each action logs what it did, and a text listing of names in the game's script file was used to find candidates.
+- **Previous station** does not wrap at the first station, because no station count was found.
+- **Volume** changes the game's own Car Radio Volume setting, the same one in its sound settings. Whether it persists after quitting is unknown.
+- **Sections:** the page now has Driving and Radio sections with title bands, and shorter rows so 14 fit.
+
+### UI elements
+
+Using the game's own widgets would look the most native. Public docs (SRC-043) confirm that its UI files live under `base/gameplay/gui` and that a script can spawn items from them. The names of the items in the Settings page are not documented in what was read, and finding them needs a tool that opens the game's files, such as WolvenKit, which is not installed. So this build draws its own elements in the game's colours.
+
+Checks: lints clean, 143 of 143 tests passed, script compiled against a copy of the game's `final.redscripts`.
+
 ## Next step
 
-With the user's approval, install. Then test the page, each function in a car, saving across a restart, and no replay on resume.
+With the user's approval, install. The user binds the requested set and tests it in a car.

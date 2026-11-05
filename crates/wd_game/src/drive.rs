@@ -124,8 +124,8 @@ pub fn gate_controls(held: u64, pressed: u64, waiting: u64, may_apply: bool) -> 
     ((held | pressed) & !waiting, waiting)
 }
 
-/// The gamepad buttons pressed by the controls that count, from (control bit, gamepad button) pairs.
-pub fn pad_flags(controls: u64, pairs: impl Iterator<Item = (u64, u16)>) -> u16 {
+/// The routes pressed by the controls that count, from (control bit, route) pairs.
+pub fn route_flags(controls: u64, pairs: impl Iterator<Item = (u64, u32)>) -> u32 {
     pairs.fold(0, |flags, (bit, flag)| {
         if bit != 0 && controls & bit != 0 {
             flags | flag
@@ -255,14 +255,14 @@ mod tests {
     #[test]
     fn controls_press_their_gamepad_buttons() {
         let pairs = [(0b01, 0x1000), (0b10, 0x4000), (0, 0x0004)];
-        assert_eq!(pad_flags(0b01, pairs.into_iter()), 0x1000);
-        assert_eq!(pad_flags(0b11, pairs.into_iter()), 0x5000);
-        assert_eq!(pad_flags(0, pairs.into_iter()), 0);
+        assert_eq!(route_flags(0b01, pairs.into_iter()), 0x1000);
+        assert_eq!(route_flags(0b11, pairs.into_iter()), 0x5000);
+        assert_eq!(route_flags(0, pairs.into_iter()), 0);
     }
 
     #[test]
     fn an_unbound_function_presses_nothing() {
-        assert_eq!(pad_flags(u64::MAX, [(0, 0x0004)].into_iter()), 0);
+        assert_eq!(route_flags(u64::MAX, [(0, 0x0004)].into_iter()), 0);
     }
 
     #[test]

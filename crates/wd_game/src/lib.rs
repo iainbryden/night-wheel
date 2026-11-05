@@ -35,7 +35,7 @@ struct LoadTest;
 impl Plugin for LoadTest {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
     const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 12, 0);
+    const VERSION: SemVer = SemVer::new(0, 13, 0);
 
     fn exports() -> impl Exportable {
         exports![
@@ -56,6 +56,11 @@ impl Plugin for LoadTest {
             GlobalExport(global!(c"WheelDriveTest_ScreenSelected", screen_selected)),
             GlobalExport(global!(c"WheelDriveTest_ScreenSelect", screen_select)),
             GlobalExport(global!(c"WheelDriveTest_ScreenRowLit", screen_row_lit)),
+            GlobalExport(global!(c"WheelDriveTest_ScreenSection", screen_section)),
+            GlobalExport(global!(
+                c"WheelDriveTest_TakeScriptActions",
+                take_script_actions
+            )),
             GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
             GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
         ]
@@ -64,7 +69,7 @@ impl Plugin for LoadTest {
     fn on_load(env: &SdkEnv) {
         log::info!(env, "WheelDriveLoadTest loaded");
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.12.0".to_owned());
+        log_file::send("plugin loaded, version 0.13.0".to_owned());
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -239,6 +244,14 @@ fn screen_select(row: i32) {
     if let (Some(screen), Ok(row)) = (screen.as_mut(), usize::try_from(row)) {
         screen.select(row);
     }
+}
+
+fn screen_section(row: i32) -> String {
+    settings::section_at(usize::try_from(row).unwrap_or(usize::MAX)).to_owned()
+}
+
+fn take_script_actions() -> i32 {
+    shared::take_script_actions()
 }
 
 fn screen_row_lit(row: i32) -> bool {

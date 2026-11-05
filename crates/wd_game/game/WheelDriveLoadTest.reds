@@ -23,6 +23,8 @@ native func WheelDriveTest_ScreenRowValue(row: Int32) -> String;
 native func WheelDriveTest_ScreenSelected() -> Int32;
 native func WheelDriveTest_ScreenSelect(row: Int32);
 native func WheelDriveTest_ScreenRowLit(row: Int32) -> Bool;
+native func WheelDriveTest_ScreenSection(row: Int32) -> String;
+native func WheelDriveTest_TakeScriptActions() -> Int32;
 native func WheelDriveTest_ScreenStatus() -> String;
 native func WheelDriveTest_ScreenHints() -> String;
 
@@ -219,6 +221,12 @@ public class WheelDriveTestService extends ScriptableService {
         let player = GetPlayer(game);
         let driving = IsDefined(player) && VehicleComponent.IsDriver(game, player);
         WheelDriveTest_SetDriving(driving);
+        if driving {
+            let actions = WheelDriveTest_TakeScriptActions();
+            if actions != 0 {
+                this.RunRadioActions(player, actions);
+            }
+        }
         if NotEquals(driving, this.m_driving) {
             this.m_driving = driving;
             WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
@@ -227,6 +235,55 @@ public class WheelDriveTestService extends ScriptableService {
                 this.ReportRates(player);
             }
         }
+    }
+
+    // Radio functions with no gamepad button. Each logs what it did, because these are game
+    // functions proven only by compiling against the game's scripts.
+    private func RunRadioActions(player: ref<PlayerPuppet>, actions: Int32) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        if (actions & 1) != 0 {
+            let on = vehicle.IsRadioReceiverActive();
+            vehicle.ToggleRadioReceiver(!on);
+            WheelDriveTest_Event(s"radio: was on=\(on), toggled");
+        }
+        if (actions & 2) != 0 {
+            vehicle.NextRadioReceiverStation();
+            WheelDriveTest_Event(s"radio: next, index \(vehicle.GetCurrentRadioIndex())");
+        }
+        if (actions & 4) != 0 {
+            let index = Cast<Int32>(vehicle.GetCurrentRadioIndex());
+            let position = RadioStationDataProvider.GetRadioStationUIIndex(index);
+            if position > 0 {
+                let previous = EnumInt(RadioStationDataProvider.GetRadioStationByUIIndex(position - 1));
+                vehicle.SetRadioReceiverStation(Cast<Uint32>(previous));
+            }
+            WheelDriveTest_Event(s"radio: previous from position \(position), index \(vehicle.GetCurrentRadioIndex())");
+        }
+        if (actions & 8) != 0 {
+            this.ChangeRadioVolume(1);
+        }
+        if (actions & 16) != 0 {
+            this.ChangeRadioVolume(-1);
+        }
+    }
+
+    private func ChangeRadioVolume(direction: Int32) {
+        let settings = GameInstance.GetSettingsSystem(GetGameInstance());
+        let volume = settings.GetVar(n"/audio/volume", n"CarRadioVolume") as ConfigVarInt;
+        if !IsDefined(volume) {
+            WheelDriveTest_Event("radio: volume setting not found");
+            return;
+        }
+        let value = volume.GetValue() + direction * volume.GetStepValue();
+        value = Max(volume.GetMinValue(), Min(volume.GetMaxValue(), value));
+        volume.SetValue(value);
+        if settings.NeedsConfirmation() {
+            settings.ConfirmChanges();
+        }
+        WheelDriveTest_Event(s"radio: volume \(value)");
     }
 
     private func StartListening(player: ref<PlayerPuppet>) {
@@ -390,16 +447,23 @@ public class WheelDriveTestService extends ScriptableService {
         content.Reparent(page);
 
         this.AddText(content, heading, 56, 0.0, 0.0, 2000.0, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
-        this.AddRect(content, 0.0, 130.0, 2000.0, 3.0, this.Teal());
-        this.AddText(content, body, 42, 20.0, 140.0, 1000.0, 70.0, new HDRColor(0.85, 0.85, 0.85, 1.0), false).SetText("Driving");
 
         ArrayClear(this.m_rowValues);
         ArrayClear(this.m_rowMarks);
         let count = WheelDriveTest_ScreenRowCount();
         let row = 0;
+        let y = 100.0;
         while row < count {
-            let y = 220.0 + Cast<Float>(row) * 100.0;
-            let mark = this.AddRect(content, 0.0, y, 2000.0, 90.0, this.Red());
+            let section = WheelDriveTest_ScreenSection(row);
+            if StrLen(section) > 0 {
+                y += 16.0;
+                let band = this.AddRect(content, 0.0, y, 2000.0, 66.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
+                band.SetOpacity(0.9);
+                this.AddRect(content, 0.0, y, 2000.0, 3.0, this.Teal());
+                this.AddText(content, body, 40, 20.0, y, 1000.0, 66.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText(section);
+                y += 74.0;
+            }
+            let mark = this.AddRect(content, 0.0, y, 2000.0, 70.0, this.Red());
             mark.SetOpacity(0.03);
             mark.SetName(StringToName(IntToString(row)));
             mark.SetInteractive(true);
@@ -407,21 +471,21 @@ public class WheelDriveTestService extends ScriptableService {
             mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
             ArrayPush(this.m_rowMarks, mark);
 
-            this.AddText(content, body, 42, 30.0, y, 1000.0, 90.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
+            this.AddText(content, body, 38, 30.0, y, 1000.0, 70.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
 
             let boxX = 1050.0;
             let boxW = 900.0;
-            this.AddRect(content, boxX, y + 8.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 80.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 8.0, 2.0, 74.0, this.Red());
-            this.AddRect(content, boxX + boxW - 2.0, y + 8.0, 2.0, 74.0, this.Red());
-            ArrayPush(this.m_rowValues, this.AddText(content, body, 40, boxX, y, boxW, 90.0, this.Teal(), true));
+            this.AddRect(content, boxX, y + 6.0, boxW, 2.0, this.Red());
+            this.AddRect(content, boxX, y + 62.0, boxW, 2.0, this.Red());
+            this.AddRect(content, boxX, y + 6.0, 2.0, 58.0, this.Red());
+            this.AddRect(content, boxX + boxW - 2.0, y + 6.0, 2.0, 58.0, this.Red());
+            ArrayPush(this.m_rowValues, this.AddText(content, body, 36, boxX, y, boxW, 70.0, this.Teal(), true));
+            y += 74.0;
             row += 1;
         }
 
-        let bottom = 220.0 + Cast<Float>(count) * 100.0;
-        this.m_status = this.AddText(content, heading, 34, 0.0, bottom + 20.0, 2000.0, 70.0, this.Teal(), true);
-        this.m_hints = this.AddText(content, heading, 30, 0.0, bottom + 100.0, 2000.0, 60.0, this.Red(), true);
+        this.m_status = this.AddText(content, heading, 30, 0.0, y + 8.0, 2000.0, 50.0, this.Teal(), true);
+        this.m_hints = this.AddText(content, heading, 26, 0.0, y + 62.0, 2000.0, 44.0, this.Red(), true);
 
         this.m_screen = page;
         if IsDefined(this.m_menuRoot) {
