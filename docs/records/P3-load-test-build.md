@@ -44,6 +44,30 @@ Versions: Rust 1.99.1; `red4ext-rs` 0.11.2 at `1ea91e760c0626245449f21e184e9f860
 5. Read `load-test.log` and the loader logs.
 6. Remove every added file and restore anything replaced, unless the user wants to keep the loader for the next test. Compare against the step 1 listing.
 
+## Game run, 2026-11-04
+
+Approved by the user. 19 files were added and none overwritten. Game: patch 2.5, Steam build 26161058; RED4ext reported product 2.50, file version 3.0.88.46235. Two launches appear in the logs, at 19:27 and 19:33.
+
+| Question | Result | Evidence |
+|---|---|---|
+| Does the plugin load? | Yes, both launches | Loader log; `plugin loaded` |
+| Does the script compile? | Yes, on the game's bundle offline and in the game | `redscript-cli`; loader log |
+| Can a script call the plugin? | Yes | `script ping 41, reply 42` |
+| Do pause events arrive? | Yes, once per launch | `session-pause`, then `session-resume`, on one menu visit each |
+| Are wheel reports read during pause? | Yes | 13,790 reports over 35 paused seconds |
+| Do key presses arrive during pause? | Yes | 14 presses logged while paused |
+| Clean shutdown? | Yes, first launch | Plugin and loader unload logged in order |
+| Errors? | None reported by the user | No new crash report folder |
+
+Limits:
+
+- The user reported the game felt somewhat laggy, cause unknown. No frame rate was measured, with or without the mod, so this neither implicates nor clears it.
+- `Session/Pause` was seen to line up with the user's pause steps by order only.
+- Keyboard and gamepad behaviour in play was not separately confirmed by the user. Key events reached the script.
+- Which keys or controls were used was not recorded, by design.
+- No game save changed at the first check, while the second launch was still running. `user.gls` in the saves folder changed. Recheck after the game closes.
+- Rollback has not been run.
+
 ## Next step
 
-Get approval for the deployment plan.
+Decide whether to keep the loader for the pause-screen test, and compare lag with the mod files removed.
