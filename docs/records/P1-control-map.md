@@ -42,4 +42,6 @@ The left paddle marker logged Button 6 ten times, and matches its place in the l
 - **Stability:** no crash report, plugin unloaded at about 10 minutes, wheel connected throughout.
 - **Saves:** the game wrote `AutoSave-15` and `user.gls`. The user has said they do not need recent autosaves.
 - **Menus, from the user's screenshots:** WHEEL SETTINGS appears above Quit Game in the pause menu. The main menu doesn't have it. Neither menu shows a MOD SETTINGS entry. The panel's left edge slightly overlaps the pause menu's column.
-- **Steering speed x2:** two read-backs show 2, 0.3, 200, 260. About 1.7 minutes were spent driving. The user's report is pending.
+- **Steering speed x2:** two read-backs show 2, 0.3, 200, 260. About 1.7 minutes were spent driving. In the retest, the user reports the tires keep up and are "properly reactive", with the caveat "at the moment". Tire angle is not measured.
+- **Game's own pause entries:** the user reports Load Game and Settings work as expected.
+- **Centre:** with the wheel roughly centred within its play, the panel read 34113, against a calibrated centre of 33078. That is about 3.8 degrees at the 240 degree range, if the range is linear. The user reports play in the middle with no force holding the wheel. Whether the value changes within that play is not known.
