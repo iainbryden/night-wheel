@@ -87,6 +87,12 @@ Timing during 194 seconds of driving:
 | Game's XInput polling | Very steady: median 62 per second, about 16 ms apart; worst gap under 20 ms |
 | Script updates | Often about 77 per second, independent of the poll rate |
 
+Final check after the game closed: clean shutdown, no wheel disconnect, and no new crash report. The user confirmed the wheel did not affect V on foot.
+
+**One save changed.** `AutoSave-1` (`sav.dat`, `metadata.9.json`, `screenshot.png`) was rewritten during the run, along with `user.gls`. This fits the game's own autosave, but it means an autosave was written with the mod loaded, which is what the rule against modifying saves is meant to watch. The earlier copy is in `out/game-before/saves/AutoSave-1`. Later runs should avoid driving long enough to autosave, or expect this. Whether that save is now marked as modded has not been checked.
+
+One paused second logged applied polls. Applied polls are counted per second and the state is sampled at the second's end, so this fits the second in which pause began, but it is not proven.
+
 ### Reading of the results
 
 The poll rate stayed near 62 per second while script updates ran faster, so the game appears to poll XInput on a fixed cycle of about 16 ms. That is the largest wait measured up to the point where the value enters the game: at most about 16 ms plus report spacing.
