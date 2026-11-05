@@ -44,4 +44,20 @@ The left paddle marker logged Button 6 ten times, and matches its place in the l
 - **Menus, from the user's screenshots:** WHEEL SETTINGS appears above Quit Game in the pause menu. The main menu doesn't have it. Neither menu shows a MOD SETTINGS entry. The panel's left edge slightly overlaps the pause menu's column.
 - **Steering speed x2:** two read-backs show 2, 0.3, 200, 260. About 1.7 minutes were spent driving. In the retest, the user reports the tires keep up and are "properly reactive", with the caveat "at the moment". Tire angle is not measured.
 - **Game's own pause entries:** the user reports Load Game and Settings work as expected.
-- **Centre:** with the wheel roughly centred within its play, the panel read 34113, against a calibrated centre of 33078. That is about 3.8 degrees at the 240 degree range, if the range is linear. The user reports play in the middle with no force holding the wheel. Whether the value changes within that play is not known.
+- **Centre:** with the wheel roughly centred within its play, the panel read 34113, against a calibrated centre of 33078. The user reports play in the middle with no force holding the wheel.
+
+## Steering check at the wheel
+
+Read from the panel by the user, by hand, one reading each, with G HUB sensitivity 24 and range 240.
+
+| Position | Value |
+|---|---|
+| Left edge of the play | 30338 |
+| Right edge of the play | 35087 |
+| About an inch past the right edge | 45356 |
+| About an inch past the left edge | 16453 |
+
+- **The sensor sees the play.** The value spans 4,749 across it, so the play is not lost before the reading, and no dead spot was found at this point in the path.
+- **Centre.** The middle of the play is 32712. The calibrated 33078 is inside the play and about 366 away, so the earlier "about 3.8 degrees off" came from where the wheel was resting and overstated the error.
+- **Small turns are large, not flattened.** About an inch moved the value by about 10,300 to the right and 13,900 to the left. A straight line over 240 degrees would give about 2,700 for 10 degrees. So G HUB's sensitivity 24 is not softening small turns here, which was the earlier suspicion. The inch is an estimate and may be off, and the shape of the response is not established.
+- **The car can steer within the play.** With a dead zone of 0, resting at the play's edges gives an intent of about 0.08 left and 0.06 right, with nothing holding the wheel at centre. An optional small dead zone or force feedback centring may help. R01 already includes a dead zone setting.
