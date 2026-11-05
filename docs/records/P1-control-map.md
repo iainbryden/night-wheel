@@ -30,7 +30,8 @@ The left paddle marker logged Button 6 ten times, and matches its place in the l
 
 ## Open points
 
-- **L2 and R3 may be swapped.** The log order was 7, 11, 8, 12. The pairing of numbers suggests the user could have pressed the right side first. The order needs confirming with the user before these names are used.
+- **The map above was wrong for L2.** The log order was 7, 11, 8, 12. In a retest, the user read L2 as Button 8, so the first sequence was not in the listed order. The retest log (`out/game-before/load-test-run13.log`) shows only Button 8 and Button 11 pressed.
+- **Button 11 is not settled.** The user reported it as L3 after being asked to press R3. If that is a slip, R3 is Button 11 and L3 is Button 12. If not, the two are the other way round. The table's L2, R3 and L3 rows must not be used until the user confirms.
 - **Buttons 13 to 19 were not seen.** The report has 25 buttons, and these seven have no control from this list. An add-on shifter is a possibility, and has not been checked.
 - **The dial sends short pulses.** Each dial click appeared as two pulses, and some were logged as lasting about 10 to 100 ms. The shortest is below the game's roughly 16 ms poll and the panel's refresh, so binding must catch presses on the wheel reader's thread rather than by sampling held state, or dial clicks will be missed. Pulses shorter than the panel's refresh may also have gone unlogged.
 - The D-pad also reported a diagonal (Hat 7) once during free presses, so diagonals exist and binding must define what they mean.
