@@ -54,6 +54,18 @@ A control with no reading since the wheel connected counts as neutral. Review be
 - Buttons, transmission, boost and force feedback are not included.
 - The wheel may re-appear as `PID_C260` again, which stops wheel input until G HUB restores it.
 
+## Calibration, 2026-11-04 20:54
+
+The user completed Calibrate in the setup app, the first real use of its clicks and the wizard. It saved these settings:
+
+| Control | Axis | Range |
+|---|---|---|
+| Steering | `0001:0030` (X) | Left 0, centre 33078, right 65535 |
+| Throttle | `0001:0032` (Z) | Rest 255, full 0 |
+| Brake | `0001:0035` (Rz) | Rest 255, full 0 |
+
+Both pedals read 0 when fully pressed, which confirms the raw-default risk fixed above was real. Those axis identities come from the user following the wizard's prompts. Whether each one matches the physical control is confirmed by the game run.
+
 ## Next step
 
-The user runs Calibrate in the setup app. Then get approval to replace the two test files in the game.
+Files replaced and hash-checked with user approval. The user runs the game test.
