@@ -2,6 +2,8 @@
 // only apply then. During pause it shows the live wheel value and a value the comma and period
 // keys change. On first driving it reports the vehicle's steering settings, using read-only
 // getters and property reads, and it passes the game's steering action to the plugin.
+// For comparison, the comma and period keys choose a steering speed level during pause. The level
+// multiplies four steering speed values in memory, for this game session only, on resume.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
@@ -25,6 +27,10 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_driving: Bool;
     private let m_reported: Bool;
     private let m_listening: wref<PlayerPuppet>;
+    private let m_driveModel: TweakDBID;
+    private let m_hasDriveModel: Bool;
+    private let m_stock: array<Float>;
+    private let m_appliedLevel: Int32;
     private let m_paused: Bool;
     private let m_steering: Int32;
     private let m_keys: Int32;
@@ -62,6 +68,7 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_paused = false;
         WheelDriveTest_Event("session-resume");
         this.HideText();
+        this.ApplyLevel();
     }
 
     private cb func OnSessionEnd(event: ref<GameSessionEvent>) {
@@ -83,10 +90,10 @@ public class WheelDriveTestService extends ScriptableService {
         if this.m_paused {
             switch event.GetKey() {
                 case EInputKey.IK_Comma:
-                    this.m_testValue -= 1;
+                    this.m_testValue = Max(this.m_testValue - 1, 0);
                     break;
                 case EInputKey.IK_Period:
-                    this.m_testValue += 1;
+                    this.m_testValue = Min(this.m_testValue + 1, 3);
                     break;
                 default:
                     break;
@@ -116,6 +123,8 @@ public class WheelDriveTestService extends ScriptableService {
             if driving {
                 this.StartListening(player);
                 this.ReportVehicle(player);
+                this.FindDriveModel(player);
+                this.ApplyLevel();
             }
         }
     }
@@ -219,6 +228,86 @@ public class WheelDriveTestService extends ScriptableService {
         }
     }
 
+    private func RateFlats() -> array<String> {
+        let names: array<String>;
+        ArrayPush(names, ".turnUpdateInputFastChangeSpeed");
+        ArrayPush(names, ".turnUpdateInputSlowChangeSpeed");
+        ArrayPush(names, ".wheelTurnMaxAddPerSecond");
+        ArrayPush(names, ".wheelTurnMaxSubPerSecond");
+        return names;
+    }
+
+    private func FlatId(base: TweakDBID, name: String) -> TweakDBID {
+        let id = base;
+        TDBID.Append(id, TDBID.Create(name));
+        return id;
+    }
+
+    private func RateMultiplier(level: Int32) -> Float {
+        switch level {
+            case 1:
+                return 2.0;
+            case 2:
+                return 4.0;
+            case 3:
+                return 10.0;
+            default:
+                return 1.0;
+        }
+    }
+
+    // Remembers stock values, only if each one is found exactly where it is expected.
+    private func FindDriveModel(player: ref<PlayerPuppet>) {
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            return;
+        }
+        let model = vehicle.GetRecord().VehDriveModelDataHandle();
+        if !IsDefined(model) {
+            WheelDriveTest_Event("rate: no drive model");
+            return;
+        }
+        let id = model.GetID();
+        if this.m_hasDriveModel && Equals(id, this.m_driveModel) {
+            return;
+        }
+        let stock: array<Float>;
+        for name in this.RateFlats() {
+            let value = TweakDBInterface.GetFloat(this.FlatId(id, name), -1.0);
+            WheelDriveTest_Event(s"rate: stock \(name) = \(FloatToString(value))");
+            if value <= 0.0 {
+                WheelDriveTest_Event("rate: value not found, so nothing will be changed");
+                this.m_hasDriveModel = false;
+                return;
+            }
+            ArrayPush(stock, value);
+        }
+        this.m_driveModel = id;
+        this.m_stock = stock;
+        this.m_hasDriveModel = true;
+        this.m_appliedLevel = 0;
+    }
+
+    private func ApplyLevel() {
+        if !this.m_hasDriveModel || this.m_testValue == this.m_appliedLevel {
+            return;
+        }
+        let multiplier = this.RateMultiplier(this.m_testValue);
+        let names = this.RateFlats();
+        let index = 0;
+        let written = true;
+        while index < ArraySize(names) {
+            let id = this.FlatId(this.m_driveModel, names[index]);
+            if !TweakDBManager.SetFlat(id, this.m_stock[index] * multiplier) {
+                written = false;
+            }
+            index += 1;
+        }
+        let updated = TweakDBManager.UpdateRecord(this.m_driveModel);
+        this.m_appliedLevel = this.m_testValue;
+        WheelDriveTest_Event(s"rate: level \(this.m_testValue) multiplier \(FloatToString(multiplier)) written=\(written) updated=\(updated)");
+    }
+
     private func ScheduleTick() {
         let tick = new WheelDriveTestTick();
         tick.service = this;
@@ -286,7 +375,7 @@ public class WheelDriveTestService extends ScriptableService {
 
     private func UpdateText() {
         if IsDefined(this.m_text) {
-            this.m_text.SetText(s"WHEEL TEST  X \(this.m_steering)  KEYS \(this.m_keys)  VALUE \(this.m_testValue)");
+            this.m_text.SetText(s"WHEEL TEST  X \(this.m_steering)  STEERING SPEED LEVEL \(this.m_testValue) (COMMA/PERIOD)");
         }
     }
 }
