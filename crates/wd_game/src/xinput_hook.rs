@@ -81,7 +81,7 @@ unsafe extern "C" fn get_state_detour(
         && let Some(config) = shared::PROFILE.get()
     {
         output = drive::merge(pad, drive::output(config, shared::raw_axes()));
-        shared::record_applied();
+        shared::record_applied(output.thumb_x);
     }
     state.Gamepad.sThumbLX = output.thumb_x;
     state.Gamepad.bLeftTrigger = output.left_trigger;

@@ -1,12 +1,14 @@
 // Game test. Tells the plugin each frame whether the player is driving, because the wheel must
 // only apply then. During pause it shows the live wheel value and a value the comma and period
-// keys change.
+// keys change. On first driving it reports the vehicle's steering settings, using read-only
+// getters and property reads, and it passes the game's steering action to the plugin.
 
 native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
 native func WheelDriveTest_Read() -> Int32;
 native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
+native func WheelDriveTest_SteeringAction(value: Float);
 
 public class WheelDriveTestTick extends DelayCallback {
     public let service: wref<WheelDriveTestService>;
@@ -21,6 +23,8 @@ public class WheelDriveTestTick extends DelayCallback {
 public class WheelDriveTestService extends ScriptableService {
     private let m_active: Bool;
     private let m_driving: Bool;
+    private let m_reported: Bool;
+    private let m_listening: wref<PlayerPuppet>;
     private let m_paused: Bool;
     private let m_steering: Int32;
     private let m_keys: Int32;
@@ -64,6 +68,7 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_active = false;
         this.m_paused = false;
         this.m_driving = false;
+        this.m_listening = null;
         WheelDriveTest_SetDriving(false);
         WheelDriveTest_Event("session-end");
         this.HideText();
@@ -108,6 +113,109 @@ public class WheelDriveTestService extends ScriptableService {
         if NotEquals(driving, this.m_driving) {
             this.m_driving = driving;
             WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
+            if driving {
+                this.StartListening(player);
+                this.ReportVehicle(player);
+            }
+        }
+    }
+
+    private func StartListening(player: ref<PlayerPuppet>) {
+        if !IsDefined(this.m_listening) {
+            player.RegisterInputListener(this, n"TurnX");
+            this.m_listening = player;
+            WheelDriveTest_Event("listening-for-steering-action");
+        }
+    }
+
+    protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
+        if Equals(ListenerAction.GetName(action), n"TurnX") {
+            WheelDriveTest_SteeringAction(ListenerAction.GetValue(action));
+        }
+    }
+
+    private func ReportVehicle(player: ref<PlayerPuppet>) {
+        if this.m_reported {
+            return;
+        }
+        this.m_reported = true;
+        this.ReportDeclared(n"gamedataVehicleSteeringSettings_Record");
+        this.ReportDeclared(n"gamedataVehicleDriveModelData_Record");
+        let vehicle = GetMountedVehicle(player);
+        if !IsDefined(vehicle) {
+            WheelDriveTest_Event("report: no vehicle found");
+            return;
+        }
+        this.ReportProperties(vehicle);
+        this.ReportRecord("vehicle", vehicle.GetRecord(), 0);
+    }
+
+    // Lists what a record type offers, whether or not it can be reached from this vehicle.
+    private func ReportDeclared(name: CName) {
+        let cls = Reflection.GetClass(name);
+        if !IsDefined(cls) {
+            WheelDriveTest_Event(s"report: no class \(NameToString(name))");
+            return;
+        }
+        for func in cls.GetFunctions() {
+            let type = func.GetReturnType();
+            let returns = IsDefined(type) ? NameToString(type.GetName()) : "nothing";
+            WheelDriveTest_Event(s"report: \(NameToString(name)).\(NameToString(func.GetName())) -> \(returns)");
+        }
+    }
+
+    private func ReportProperties(vehicle: ref<VehicleObject>) {
+        let owner = ToVariant(vehicle);
+        let cls = Reflection.GetClassOf(owner, true);
+        while IsDefined(cls) {
+            for prop in cls.GetProperties() {
+                let typeName = prop.GetType().GetName();
+                if this.IsPlainValue(typeName) {
+                    WheelDriveTest_Event(s"report: \(NameToString(cls.GetName())).\(NameToString(prop.GetName())) = \(this.ValueText(typeName, prop.GetValue(owner)))");
+                }
+            }
+            cls = cls.GetParent();
+        }
+    }
+
+    // Calls only no-argument getters on game data records, which only return stored values.
+    private func ReportRecord(label: String, record: ref<IScriptable>, depth: Int32) {
+        if !IsDefined(record) || depth > 2 {
+            return;
+        }
+        let cls = Reflection.GetClassOf(ToVariant(record), true);
+        for func in cls.GetFunctions() {
+            let type = func.GetReturnType();
+            let parameters = func.GetParameters();
+            if IsDefined(type) && ArraySize(parameters) == 0 {
+                let typeName = type.GetName();
+                let returns = NameToString(typeName);
+                let name = s"\(label).\(NameToString(func.GetName()))";
+                if StrContains(returns, "VehicleDriveModelData_Record") || StrContains(returns, "VehicleSteeringSettings_Record") {
+                    this.ReportRecord(name, FromVariant<ref<IScriptable>>(func.Call(record)), depth + 1);
+                } else {
+                    if depth > 0 && this.IsPlainValue(typeName) {
+                        WheelDriveTest_Event(s"report: \(name) = \(this.ValueText(typeName, func.Call(record)))");
+                    }
+                }
+            }
+        }
+    }
+
+    private func IsPlainValue(type: CName) -> Bool {
+        return Equals(type, n"Float") || Equals(type, n"Int32") || Equals(type, n"Bool");
+    }
+
+    private func ValueText(type: CName, value: Variant) -> String {
+        switch type {
+            case n"Float":
+                return FloatToString(FromVariant<Float>(value));
+            case n"Int32":
+                return IntToString(FromVariant<Int32>(value));
+            case n"Bool":
+                return BoolToString(FromVariant<Bool>(value));
+            default:
+                return "";
         }
     }
 
