@@ -65,3 +65,17 @@ Built to close the gaps above; not yet run in the game. Plugin 0.6.0 and script 
 No tire or steering angle was found exposed to scripts. Heading change while moving is a proxy: it covers the game's steering and the car's physics together, and cannot separate them. It gives no result while parked.
 
 Names such as `GetWorldYaw` and `GetCurrentSpeed` were checked only by compiling against the game's scripts.
+
+## Measurement run, 2026-11-04
+
+Approved by the user; files replaced and hash-checked. The game was still running when the log was read, so shutdown and save state are not covered.
+
+- **User report:** "not making a difference".
+- **Read-back:** the record values changed, from 1.0, 0.1, 95, 128 at level 0 to 10, 1, 950, 1280 at level 3. So the record is updated.
+- **Same car:** both readings show entity `9020198`. **No newly spawned car was tested**, so a car keeping its spawn-time values is still possible. These values may also not be what limits the tires.
+- **Measurement failure:** the 15,000 sample limit was reached at about 363 s, before level 3 began at about 400 s, so there is no level 3 response data. That limit was too low for the time the run took.
+- **Level 0 response:** a steering action follows the stick with no lag resolved at this sampling. Heading rate follows `TurnX` by about 170 ms, with a weak correlation of 0.45, and only 13% of samples were moving. This is a rough indication only.
+
+## Decision needed
+
+Steering speed through data changes has now failed to help in two runs. One untested case remains: a car spawned after the values change. Do that one decisive test, or stop.
