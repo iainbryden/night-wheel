@@ -58,6 +58,18 @@ Plugin 0.19.0. `wd_game.dll` SHA-256 `eb09b162a72d04bca27031ee835fb100d08e55ea14
 
 Checks: lints clean, 146 of 146 tests passed, script compiled against a copy of the game's `final.redscripts`.
 
+## Third run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: gravity brings the vehicle back down, and L2 makes it hop.
+
+- **Level now.** Parked, pitch and roll stayed near 0.00, and the centre of mass offset was small (0, 0.06, 0.13), for a mass of 1600. So tipping wasn't the main cause, and the earlier inference is only partly right.
+- **Lift doesn't deliver.** Calculated lift was at its 20 m/s² limit the whole time, about twice gravity. The car stayed at about 0 to 2.3 metres parked and about 7 to 9.6 metres when moving, with vertical speed swinging between about -4.6 and +6.2. A true net upward 10 m/s² would have climbed quickly. So much of the push isn't reaching the car, or something is working against it.
+- **Candidates, none proven:** events being dropped or limited when several arrive in a frame; the event's `radius` reducing its effect; added gravity in the game's vehicle physics, since names such as `BaseAddedGravity` and `DriveSpeedAddedGravity` appear in the game's script file; and irregular script ticks.
+
+## Direct alternative, not built
+
+`GetTeleportationFacility().Teleport` compiles on a vehicle. Setting the car's position each frame would avoid gravity and physics entirely. It may stutter, may not collide with buildings, and may upset the game's vehicle state. No script function to set velocity or switch off gravity was found among the names tried.
+
 ## Unknowns
 
 - Whether the car's inertia suits these values. The first version may wobble or feel wrong.
