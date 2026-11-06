@@ -184,3 +184,11 @@ Approved by the user; files replaced and checksums verified. Log kept as `out/ga
 ## Stronger landing push
 
 Requested by the user. Version 0.21.5, not run in the game. The push after landing can now add up to 240 m/s², four times the 60 before, and stops at the speed the car flew at, so it shouldn't overshoot. Speed is logged about every 0.05 seconds. The value is provisional, and a harder push may feel like a jolt.
+
+### Run, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. User report: "A short pause happens. But feels fine." The user also finds the pause useful, because it shows that flight has ended. Log kept as `out/game-before/night-wheel-run32.log`. No new crash report appeared when the log was read, and the game was still open then, so shutdown wasn't checked.
+
+- Two landings were logged. At 9.3, speed stayed near 0 for about 0.2 seconds, then jumped to 8.8. At 17.9, it stayed near 0 for about 0.15 seconds, then reached 14.2 and 17.2.
+- That replaces the climb of about 0.7 seconds seen at the old strength, though these landings were slower, so a fast one isn't measured.
+- The brief stop before the push takes effect remains. The user accepts it, and this value stays as it is. It's provisional.
