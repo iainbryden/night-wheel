@@ -131,3 +131,16 @@ Version 0.26.0, not run in the game. All 22 functions are `string_list` rows in 
 - Rows with 30 values may draw too many dots under their value. The value's plain text label goes through the same cleanup as the others.
 - The list's control names are checked against `scripts/settings_tab.py` by a Rust test, as is each row's place in the tab.
 - The old WHEEL SETTINGS page stays until this is proven.
+
+### Run of 0.26.0, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run41.log`. All rows appear, the page scrolls and labels are clean, per the screenshot. Two defects:
+
+- **Binding rows show no value.** The dots' positions match the bindings, so the data is right, but the list row doesn't draw plain text values. The user reads these as sliders.
+- **Hover to set didn't work.** The log shows no press reaching a row. Why isn't known, and the likeliest reason is that the pause menu's refresh doesn't run on the Settings screen.
+
+The game's Key Bindings rows aren't an option. Their data is `is_input: true` and a game action name, so they belong to the game's own input map.
+
+### Fixes
+
+Version 0.26.1, not run in the game. The list row's `Refresh` now writes the value text and hides the dots for `/wheel/` rows. Each hover starts a looping animation on that row, which checks for a press, and it should work from the main menu as well. The log notes each hover and each press.

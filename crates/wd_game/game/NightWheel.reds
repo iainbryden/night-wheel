@@ -91,10 +91,21 @@ public func Setup(entry: ref<ConfigVar>, isPreGame: Bool) -> Void {
     }
 }
 
+// The game's list row doesn't draw plain text as its value, so this row's value is set here. The
+// row's dots mark each choice, and 30 are too many to be useful.
 @wrapMethod(SettingsSelectorControllerListString)
 public func Refresh() -> Void {
     wrappedMethod();
     NightWheel_CleanLabels(this.GetRootWidget());
+    let entry = this.m_SettingsEntry as ConfigVarListString;
+    if IsDefined(entry) && StrBeginsWith(NameToString(entry.GetGroupPath()), "/wheel/") {
+        let values = entry.GetValues();
+        let index = entry.GetIndex();
+        if index >= 0 && index < ArraySize(values) {
+            inkTextRef.SetText(this.m_ValueText, values[index]);
+        }
+        inkWidgetRef.SetVisible(this.m_dotsContainer, false);
+    }
 }
 
 @wrapMethod(SettingsSelectorController)
@@ -121,7 +132,7 @@ protected cb func OnHoverOver(e: ref<inkPointerEvent>) -> Bool {
     NightWheel_CleanLabels(this.GetRootWidget());
     let service = NightWheel_Service();
     if IsDefined(service) {
-        service.SetHoveredRow(this.m_SettingsEntry);
+        service.SetHoveredRow(this.m_SettingsEntry, this.GetRootWidget());
     }
     return handled;
 }
@@ -132,7 +143,7 @@ protected cb func OnHoverOut(e: ref<inkPointerEvent>) -> Bool {
     NightWheel_CleanLabels(this.GetRootWidget());
     let service = NightWheel_Service();
     if IsDefined(service) {
-        service.SetHoveredRow(null);
+        service.ClearHoveredRow();
     }
     return handled;
 }
@@ -317,6 +328,7 @@ public class NightWheelService extends ScriptableService {
     private let m_menuController: wref<inkGameController>;
     private let m_tabRows: array<wref<SettingsSelectorController>>;
     private let m_hoveredRow: ref<ConfigVarListString>;
+    private let m_hoverRefresh: ref<inkAnimProxy>;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -483,7 +495,7 @@ public class NightWheelService extends ScriptableService {
 
     public func ClearTabRows() {
         ArrayClear(this.m_tabRows);
-        this.m_hoveredRow = null;
+        this.ClearHoveredRow();
     }
 
     private func RefreshTabRows() {
@@ -494,24 +506,53 @@ public class NightWheelService extends ScriptableService {
         }
     }
 
-    public func SetHoveredRow(setting: ref<ConfigVar>) {
-        this.m_hoveredRow = setting as ConfigVarListString;
+    // Pressing a wheel control while hovering over a binding row sets that row in one press. A looping
+    // animation on the row itself checks for a press, so it only runs while a row is hovered and works
+    // on any screen, including the main menu. A press made before hovering is thrown away, so moving
+    // onto a row can't set it by accident.
+    public func SetHoveredRow(setting: ref<ConfigVar>, row: ref<inkWidget>) {
+        this.ClearHoveredRow();
+        let listRow = setting as ConfigVarListString;
+        if !IsDefined(listRow) || !StrBeginsWith(NameToString(listRow.GetGroupPath()), "/wheel/") {
+            return;
+        }
+        this.m_hoveredRow = listRow;
+        NightWheel_TakePressedListIndex();
+        let hold = new inkAnimTransparency();
+        hold.SetStartTransparency(1.0);
+        hold.SetEndTransparency(1.0);
+        hold.SetDuration(0.016);
+        let definition = new inkAnimDef();
+        definition.AddInterpolator(hold);
+        let options: inkAnimOptions;
+        options.loopType = inkanimLoopType.Cycle;
+        options.loopInfinite = true;
+        this.m_hoverRefresh = row.PlayAnimationWithOptions(definition, options);
+        this.m_hoverRefresh.RegisterToCallback(inkanimEventType.OnEndLoop, this, n"OnHoverRefresh");
+        NightWheel_Event(s"settings tab: hovering \(NameToString(listRow.GetName()))");
     }
 
-    // Pressing a wheel control while hovering over a binding row sets that row in one press. A press
-    // made anywhere else is thrown away, so moving onto a row can't set it by accident. This runs
-    // from the pause menu's refresh, so it isn't available from the main menu.
+    public func ClearHoveredRow() {
+        if IsDefined(this.m_hoverRefresh) {
+            this.m_hoverRefresh.Stop();
+            this.m_hoverRefresh = null;
+        }
+        this.m_hoveredRow = null;
+    }
+
+    private cb func OnHoverRefresh(proxy: ref<inkAnimProxy>) -> Bool {
+        this.UpdateTabPress();
+    }
+
     private func UpdateTabPress() {
-        if IsDefined(this.m_screen) {
+        if IsDefined(this.m_screen) || !IsDefined(this.m_hoveredRow) {
             return;
         }
         let index = NightWheel_TakePressedListIndex();
-        if index < 0 || !IsDefined(this.m_hoveredRow) {
+        if index < 0 {
             return;
         }
-        if !StrBeginsWith(NameToString(this.m_hoveredRow.GetGroupPath()), "/wheel/") {
-            return;
-        }
+        NightWheel_Event(s"settings tab: wheel press set \(NameToString(this.m_hoveredRow.GetName())) to \(index)");
         this.m_hoveredRow.SetIndex(index);
         let settings = GameInstance.GetSettingsSystem(GetGameInstance());
         if settings.NeedsConfirmation() {
@@ -1088,7 +1129,6 @@ public class NightWheelService extends ScriptableService {
     }
 
     private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
-        this.UpdateTabPress();
         this.UpdateScreen();
     }
 
