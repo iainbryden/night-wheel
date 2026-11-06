@@ -33,6 +33,14 @@ Version 0.21.2 adds boost's limits, using the user's values and rules. All are u
 - **Settings page:** Esc, and the layout at ultrawide and other UI scales, are untested.
 - **Build:** the reviewer's workspace build stopped when RED4ext's CMake step tried to write into a read-only Cargo cache. That hasn't happened here, and it wasn't reproduced.
 
+## First runs of 0.21.2, 2026-11-05
+
+Approved by the user; files replaced and checksums verified. User report: "All good so far." The logs of two runs are kept as `out/game-before/night-wheel-run27.log` and `night-wheel-run28.log`. No new crash report appeared, and both runs reached a clean plugin unload.
+
+- **Shown by the logs:** settings copied once from the old folder, flight started and ended with Climb and Descend, and each run shut down cleanly.
+- **Boost:** four bursts, each ending within about 0.3 seconds as released, and the time limit never triggered. Those would be short taps, which the user hasn't confirmed. The same route carried Climb and Descend held for many seconds, so a cut-out is unlikely but not excluded.
+- **Not shown by the logs:** a 5 second hold, a wheel disconnect and a reload during flight. Tests 1, 2, 5 and 6 below can't be counted as passed from these runs. Test 3 leaves no log entry.
+
 ## To test in the game
 
 1. Unplug the wheel while holding boost, and while flying with the throttle down.
