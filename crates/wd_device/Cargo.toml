@@ -4,6 +4,7 @@ description = "Read-only wheel input through Windows Raw Input"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 wd_core = { path = "../wd_core" }

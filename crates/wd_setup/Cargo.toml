@@ -4,6 +4,7 @@ description = "Setup and calibration app"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 wd_core = { path = "../wd_core" }

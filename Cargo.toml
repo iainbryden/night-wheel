@@ -6,6 +6,7 @@ members = ["crates/wd_core", "crates/wd_device", "crates/wd_diag", "crates/wd_se
 version = "0.21.0"
 edition = "2024"
 publish = false
+license = "MIT"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

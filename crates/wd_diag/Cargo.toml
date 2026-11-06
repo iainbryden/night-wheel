@@ -4,6 +4,7 @@ description = "Standalone read-only wheel diagnostic"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 wd_device = { path = "../wd_device" }

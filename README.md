@@ -88,4 +88,4 @@ This is a new implementation written from behaviour requirements, public documen
 
 ## License
 
-Not chosen yet (decision D14). No license is granted until one is added.
+[MIT](LICENSE). Libraries built into the package keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

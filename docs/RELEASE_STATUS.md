@@ -45,10 +45,9 @@ Release requirements:
 5. Detect conflicting wheel mods and explain them.
 6. Add an opt-in diagnostic summary for support.
 7. Review the TweakXL dependency formally, because it has no decision record of its own.
-8. Choose a license (D14). Without one, nobody else has permission to use the code.
-9. Include the full license texts for bundled Rust libraries. `THIRD_PARTY_NOTICES.md` lists them but doesn't contain the texts.
-10. Check the name on Nexus Mods and for trademarks, and review the platform's publishing policy at release time.
-11. Test the package on a clean install.
+8. Include the full license texts for bundled Rust libraries. `THIRD_PARTY_NOTICES.md` lists them but doesn't contain the texts.
+9. Check the name on Nexus Mods and for trademarks, and review the platform's publishing policy at release time.
+10. Test the package on a clean install.
 
 ## Review notes
 

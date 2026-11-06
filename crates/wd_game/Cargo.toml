@@ -4,6 +4,7 @@ description = "Game plugin: wheel input through the game's gamepad polls, with n
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
