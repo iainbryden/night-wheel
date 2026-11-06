@@ -8,7 +8,7 @@ A Logitech G29 driving mod for Cyberpunk 2077 on Windows, written independently 
 - Has a **WHEEL SETTINGS** page in the pause menu, where you bind wheel controls to functions with one press.
 - Controls vehicle functions, the camera and the radio from the wheel.
 - Adds boost, with an adjustable strength. A burst lasts up to 5 seconds, then has a 3 second cooldown, and each burst takes a fresh press.
-- Adds flight: **Climb** lifts the car and keeps rising while held. **Descend** lowers it, and holding it at the ground for half a second ends flight. The car stops when it lands. Flight doesn't check for buildings ahead, so the car can pass through them.
+- Adds flight: **Climb** lifts the car and keeps rising while held. **Descend** lowers it, and holding it at the ground for half a second ends flight. The car briefly stops on landing, then regains its speed within about a second. Flight doesn't check for buildings ahead, so the car can pass through them.
 
 Force feedback, wheel LEDs and manual shifting don't exist yet. The mod sends nothing to the wheel.
 
@@ -23,7 +23,7 @@ Tested on patch 2.5 (Steam) with these versions, which you install separately:
 | [Codeware](https://github.com/psiberx/cp2077-codeware) | 1.21.2 |
 | [TweakXL](https://github.com/psiberx/cp2077-tweak-xl) | 1.12.0 |
 
-Logitech G HUB must be running. These G HUB settings were used in testing: operating range 240, sensitivity 24, and the centering spring for non force feedback games off.
+Logitech G HUB must be running. These G HUB settings work on the test PC: operating range 210, sensitivity 4, and the centering spring for non force feedback games off.
 
 ## Install
 

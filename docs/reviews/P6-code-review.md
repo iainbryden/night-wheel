@@ -57,6 +57,11 @@ User report on 0.21.3: the remaining tests were run.
 - **Likely cause, not proven:** Windows' notices aren't reaching the reader's window, or another registration in the game's process took over the wheel's input after the change. Only one window in a process can receive each kind of input.
 - **Fix in 0.21.4, untested:** once a second the reader checks that its registration is still its own and compares the devices Windows lists with those it knows, and it logs anything it had to correct. If the wheel just stops reporting with nothing else changed, this won't catch it, and the log will show that.
 
+## Run of 0.21.4, 2026-11-06
+
+- **Wheel unplugged:** the game showed its own controller disconnected warning and paused, which the user accepts. The log shows the disconnect, and the wheel connecting again 8 seconds later. Both came through Windows' notices, and the once-a-second check had nothing to correct.
+- **Top switch:** whether it was tried in this run isn't recorded, and no separate event shows it. The fix in 0.21.4 is still unproven for that case.
+
 ## To test in the game
 
 1. Unplug the wheel while holding boost, and while flying with the throttle down.

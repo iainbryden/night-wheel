@@ -173,3 +173,10 @@ Version 0.21.4, not run in the game. `PhysicsWakeUp` compiles on a vehicle, and 
 ## Frame rate in flight
 
 User report: the frame rate drops as soon as the car lifts off. The cause isn't known. Flight adds a teleport, a physics push and two 200 metre rays each frame, so the mod could be responsible as well as the game. The input poll rate stays at about 62 a second in flight, but it doesn't follow frames, so it says nothing either way. Version 0.21.4 logs frames per second on each stats line to measure this.
+
+## Run of 0.21.4, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run31.log`. No new crash report appeared.
+
+- **Landing: better, and good enough for now.** User report: the car "did kind of stop" but felt better. The log shows the physics now respond. Speed starts near 0 and climbs back: a landing at 30.7 reached 30.4 about 0.7 seconds later, and slow landings reached their speed within about 0.3 seconds. So the car does stop briefly first. A stronger push could shorten that, and the climb at 30.7 was about half the 60 m/s² asked for. `PhysicsWakeUp` was part of this change, and which part made the difference isn't separated.
+- **Frame rate: the log doesn't show a drop.** Script updates a second averaged 59.3 while driving and 64.1 while flying, and showed no fall at the 4 lift-offs measured. Script updates may not match displayed frames, and the drop the user saw may be uneven pacing, which a per-second count wouldn't show. So this doesn't disprove the report. It's left as it is.
