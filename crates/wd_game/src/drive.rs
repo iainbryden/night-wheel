@@ -233,6 +233,7 @@ mod tests {
             steering_range: 900,
             steering_speed: None,
             settings_tab_filled: false,
+            settings_tab_bindings_filled: false,
         }
     }
 

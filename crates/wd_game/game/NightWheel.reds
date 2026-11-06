@@ -42,6 +42,13 @@ native func NightWheel_SliderNumber(index: Int32) -> Float;
 native func NightWheel_SliderSet(index: Int32, number: Float);
 native func NightWheel_TabFilled() -> Bool;
 native func NightWheel_MarkTabFilled();
+native func NightWheel_TabBindingsFilled() -> Bool;
+native func NightWheel_MarkTabBindingsFilled();
+native func NightWheel_RowKey(row: Int32) -> String;
+native func NightWheel_RowGroup(row: Int32) -> String;
+native func NightWheel_RowListIndex(row: Int32) -> Int32;
+native func NightWheel_RowSetListIndex(row: Int32, index: Int32);
+native func NightWheel_TakePressedListIndex() -> Int32;
 native func NightWheel_ScreenHints() -> String;
 
 // The WHEEL tab's labels are plain text, which the game's menu marks as not translated. This removes
@@ -70,9 +77,23 @@ public func NightWheel_CleanLabels(widget: ref<inkWidget>) {
     }
 }
 
+public func NightWheel_Service() -> ref<NightWheelService> {
+    return GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
+}
+
 @wrapMethod(SettingsSelectorController)
 public func Setup(entry: ref<ConfigVar>, isPreGame: Bool) -> Void {
     wrappedMethod(entry, isPreGame);
+    NightWheel_CleanLabels(this.GetRootWidget());
+    let service = NightWheel_Service();
+    if IsDefined(service) && IsDefined(entry) && StrBeginsWith(NameToString(entry.GetGroupPath()), "/wheel/") {
+        service.AddTabRow(this);
+    }
+}
+
+@wrapMethod(SettingsSelectorControllerListString)
+public func Refresh() -> Void {
+    wrappedMethod();
     NightWheel_CleanLabels(this.GetRootWidget());
 }
 
@@ -98,6 +119,10 @@ public func Refresh() -> Void {
 protected cb func OnHoverOver(e: ref<inkPointerEvent>) -> Bool {
     let handled = wrappedMethod(e);
     NightWheel_CleanLabels(this.GetRootWidget());
+    let service = NightWheel_Service();
+    if IsDefined(service) {
+        service.SetHoveredRow(this.m_SettingsEntry);
+    }
     return handled;
 }
 
@@ -105,6 +130,10 @@ protected cb func OnHoverOver(e: ref<inkPointerEvent>) -> Bool {
 protected cb func OnHoverOut(e: ref<inkPointerEvent>) -> Bool {
     let handled = wrappedMethod(e);
     NightWheel_CleanLabels(this.GetRootWidget());
+    let service = NightWheel_Service();
+    if IsDefined(service) {
+        service.SetHoveredRow(null);
+    }
     return handled;
 }
 
@@ -112,9 +141,10 @@ protected cb func OnHoverOut(e: ref<inkPointerEvent>) -> Bool {
 @wrapMethod(SettingsMainGameController)
 protected cb func OnUninitialize() -> Bool {
     let handled = wrappedMethod();
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
+    let service = NightWheel_Service();
     if IsDefined(service) {
         service.SyncSettingsTab();
+        service.ClearTabRows();
     }
     return handled;
 }
@@ -285,6 +315,8 @@ public class NightWheelService extends ScriptableService {
     private let m_sliderShown: array<Float>;
     private let m_sliderTrackW: array<Float>;
     private let m_menuController: wref<inkGameController>;
+    private let m_tabRows: array<wref<SettingsSelectorController>>;
+    private let m_hoveredRow: ref<ConfigVarListString>;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -386,6 +418,107 @@ public class NightWheelService extends ScriptableService {
             NightWheel_MarkTabFilled();
             NightWheel_Event("settings tab: filled once from saved values");
         }
+        this.SyncTabBindings();
+    }
+
+    private func RowSetting(row: Int32) -> ref<ConfigVarListString> {
+        let settings = GameInstance.GetSettingsSystem(GetGameInstance());
+        let group = StringToName(NightWheel_RowGroup(row));
+        let name = StringToName(NightWheel_RowKey(row));
+        if !settings.HasVar(group, name) {
+            let none: ref<ConfigVarListString>;
+            return none;
+        }
+        return settings.GetVar(group, name) as ConfigVarListString;
+    }
+
+    // Bindings follow the same rule as the sliders. One fill from the mod's saved bindings, leaving
+    // the tab's default on functions with none, and then the tab decides. A control that a change
+    // takes from another function is shown as gone from that function's row too.
+    public func SyncTabBindings() {
+        let count = NightWheel_ScreenRowCount();
+        if !IsDefined(this.RowSetting(0)) {
+            return;
+        }
+        let row = 0;
+        if !NightWheel_TabBindingsFilled() {
+            while row < count {
+                let setting = this.RowSetting(row);
+                let saved = NightWheel_RowListIndex(row);
+                if IsDefined(setting) && saved > 0 {
+                    setting.SetIndex(saved);
+                }
+                row += 1;
+            }
+            NightWheel_MarkTabBindingsFilled();
+            NightWheel_Event("settings tab: bindings filled once from saved values");
+        }
+        row = 0;
+        while row < count {
+            let setting = this.RowSetting(row);
+            if IsDefined(setting) && setting.GetIndex() != NightWheel_RowListIndex(row) {
+                NightWheel_Event(s"settings tab: \(NightWheel_RowKey(row)) is now \(setting.GetIndex())");
+                NightWheel_RowSetListIndex(row, setting.GetIndex());
+            }
+            row += 1;
+        }
+        let moved = false;
+        row = 0;
+        while row < count {
+            let setting = this.RowSetting(row);
+            if IsDefined(setting) && setting.GetIndex() != NightWheel_RowListIndex(row) {
+                setting.SetIndex(NightWheel_RowListIndex(row));
+                moved = true;
+            }
+            row += 1;
+        }
+        if moved {
+            this.RefreshTabRows();
+        }
+    }
+
+    public func AddTabRow(row: ref<SettingsSelectorController>) {
+        ArrayPush(this.m_tabRows, row);
+    }
+
+    public func ClearTabRows() {
+        ArrayClear(this.m_tabRows);
+        this.m_hoveredRow = null;
+    }
+
+    private func RefreshTabRows() {
+        for row in this.m_tabRows {
+            if IsDefined(row) {
+                row.Refresh();
+            }
+        }
+    }
+
+    public func SetHoveredRow(setting: ref<ConfigVar>) {
+        this.m_hoveredRow = setting as ConfigVarListString;
+    }
+
+    // Pressing a wheel control while hovering over a binding row sets that row in one press. A press
+    // made anywhere else is thrown away, so moving onto a row can't set it by accident. This runs
+    // from the pause menu's refresh, so it isn't available from the main menu.
+    private func UpdateTabPress() {
+        if IsDefined(this.m_screen) {
+            return;
+        }
+        let index = NightWheel_TakePressedListIndex();
+        if index < 0 || !IsDefined(this.m_hoveredRow) {
+            return;
+        }
+        if !StrBeginsWith(NameToString(this.m_hoveredRow.GetGroupPath()), "/wheel/") {
+            return;
+        }
+        this.m_hoveredRow.SetIndex(index);
+        let settings = GameInstance.GetSettingsSystem(GetGameInstance());
+        if settings.NeedsConfirmation() {
+            settings.ConfirmChanges();
+        }
+        this.SyncTabBindings();
+        this.RefreshTabRows();
     }
 
     // Boost, flight and Autodrive belong to one session. Flight's saved position must never move a
@@ -955,6 +1088,7 @@ public class NightWheelService extends ScriptableService {
     }
 
     private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
+        this.UpdateTabPress();
         this.UpdateScreen();
     }
 

@@ -21,7 +21,23 @@ GROUP = '/wheel/driving'
 GROUPS = [
     {'group_name': MARK, 'display_name': 'WHEEL', 'order': 10},
     {'group_name': GROUP, 'display_name': 'Driving', 'order': 0},
+    {'group_name': '/wheel/flight', 'display_name': 'Flight', 'order': 1},
+    {'group_name': '/wheel/camera', 'display_name': 'Camera', 'order': 2},
+    {'group_name': '/wheel/radio', 'display_name': 'Radio', 'order': 3},
+    {'group_name': '/wheel/other', 'display_name': 'Other', 'order': 4},
 ]
+
+# The wheel's controls, in the order the plugin expects. crates/wd_game/src/settings.rs has the same
+# list, and a test there checks that the two match.
+CONTROLS = [
+    'NOT BOUND', 'X', 'SQUARE', 'CIRCLE', 'TRIANGLE',
+    'D-PAD UP', 'D-PAD RIGHT', 'D-PAD DOWN', 'D-PAD LEFT',
+    'RIGHT PADDLE', 'LEFT PADDLE', 'R2', 'L2', 'R3', 'L3', 'SHARE', 'OPTIONS',
+    'PLUS', 'MINUS', 'DIAL RIGHT', 'DIAL LEFT', 'RED ENTER', 'PS',
+    'BUTTON 13', 'BUTTON 14', 'BUTTON 15', 'BUTTON 16', 'BUTTON 17', 'BUTTON 18', 'BUTTON 19',
+]
+
+BIND_HELP = 'Hover here and press a wheel control to set it, or use the arrows.'
 
 
 def option(name, label, description, order, kind, default, low, high, step):
@@ -43,19 +59,81 @@ def option(name, label, description, order, kind, default, low, high, step):
     }
 
 
-OPTIONS = [{
-    'group_name': GROUP,
-    'options': [
-        option('SteeringRange', 'Steering range', 'Degrees of wheel turn from full left to full right. '
-               'Assumes G HUB is set to 900.', 0, 'int', 360, 180, 900, 30),
-        option('CenterResponse', 'Center response', 'Higher values soften steering near center.',
-               1, 'float', 1.0, 1.0, 4.0, 0.1),
-        option('SteeringSpeed', 'Steering speed', 'How quickly the tires follow the wheel. '
-               'Applies at the next game start.', 2, 'int', 2, 1, 10, 1),
-        option('BoostStrength', 'Boost strength', 'How far boost can raise the speed, as a percentage.',
-               3, 'int', 25, 25, 200, 5),
-    ],
-}]
+def binding(key, label, order, default='NOT BOUND'):
+    return {
+        'name': key,
+        'display_name': label,
+        'description': BIND_HELP,
+        'order': order,
+        'is_visible': True,
+        'in_pre_game': True,
+        'in_game': True,
+        'update_policy': 'immediately',
+        'type': 'string_list',
+        'index': CONTROLS.index(default),
+        'default_index': CONTROLS.index(default),
+        'values': CONTROLS,
+        'display_values': CONTROLS,
+    }
+
+
+OPTIONS = [
+    {
+        'group_name': GROUP,
+        'options': [
+            option('SteeringRange', 'Steering range', 'Degrees of wheel turn from full left to full right. '
+                   'Assumes G HUB is set to 900.', 0, 'int', 360, 180, 900, 30),
+            option('CenterResponse', 'Center response', 'Higher values soften steering near center.',
+                   1, 'float', 1.0, 1.0, 4.0, 0.1),
+            option('SteeringSpeed', 'Steering speed', 'How quickly the tires follow the wheel. '
+                   'Applies at the next game start.', 2, 'int', 2, 1, 10, 1),
+            binding('handbrake', 'Handbrake', 3, 'LEFT PADDLE'),
+            binding('horn', 'Horn', 4),
+            binding('lights', 'Lights', 5, 'R2'),
+            binding('vehicle_exit', 'Exit vehicle', 6),
+            binding('autodrive', 'Autodrive', 7, 'CIRCLE'),
+            binding('combat_mode', 'Combat mode', 8, 'SQUARE'),
+            binding('boost', 'Boost', 9, 'L3'),
+            option('BoostStrength', 'Boost strength', 'How far boost can raise the speed, as a percentage.',
+                   10, 'int', 25, 25, 200, 5),
+        ],
+    },
+    {
+        'group_name': '/wheel/flight',
+        'options': [
+            binding('fly_up', 'Climb / start flight', 0, 'PLUS'),
+            binding('fly_down', 'Descend / land', 1, 'MINUS'),
+        ],
+    },
+    {
+        'group_name': '/wheel/camera',
+        'options': [
+            binding('camera_change', 'Change camera', 0, 'D-PAD UP'),
+            binding('rear_view', 'Look behind', 1, 'D-PAD DOWN'),
+            binding('camera_reset', 'Reset camera', 2),
+            binding('zoom_in', 'Zoom in', 3, 'D-PAD RIGHT'),
+            binding('zoom_out', 'Zoom out', 4, 'D-PAD LEFT'),
+        ],
+    },
+    {
+        'group_name': '/wheel/radio',
+        'options': [
+            binding('radio_menu', 'Radio menu', 0, 'R3'),
+            binding('radio_toggle', 'Radio on/off', 1, 'RED ENTER'),
+            binding('radio_next', 'Next radio station', 2, 'DIAL RIGHT'),
+            binding('radio_previous', 'Previous radio station', 3, 'DIAL LEFT'),
+            binding('radio_volume_up', 'Radio volume up', 4),
+            binding('radio_volume_down', 'Radio volume down', 5),
+        ],
+    },
+    {
+        'group_name': '/wheel/other',
+        'options': [
+            binding('scanner', 'Scanner', 0, 'PS'),
+            binding('pause_menu', 'Pause menu', 1, 'OPTIONS'),
+        ],
+    },
+]
 
 
 def sha256(path):
@@ -96,7 +174,7 @@ def add(game, backup_folder):
     changed = with_tab(original)
     data = json.loads(changed)
     groups = [group['group_name'] for group in data['groups']]
-    if groups[:2] != [MARK, GROUP] or len(data['groups']) != len(json.loads(original)['groups']) + 2:
+    if groups[:2] != [MARK, GROUP] or len(data['groups']) != len(json.loads(original)['groups']) + len(GROUPS):
         raise SystemExit('The change did not parse as expected, so nothing was written.')
     with open(target, 'w', encoding='utf-8', newline='') as handle:
         handle.write(changed)

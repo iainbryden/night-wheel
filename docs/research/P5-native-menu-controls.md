@@ -117,3 +117,17 @@ Version 0.25.2, not run in the game. The tab now gets one fill from the mod's va
 ## Translations
 
 The mark doesn't mean translations are required. It's only how the menu flags text that has no translation entry. English labels in every language would be acceptable for a first release, and the page is already English only. Real translations would need the labels added to the game's text data, which needs a further framework or an edited game archive. That choice is open.
+
+### Run of 0.25.2, 2026-11-06
+
+User report: 180 survived a restart. The log shows `settings tab: value 0 is now 180` reaching the mod. The user also pointed out that the old page's settings weren't in the tab.
+
+## Bindings in the tab
+
+Version 0.26.0, not run in the game. All 22 functions are `string_list` rows in the tab, in Driving, Flight, Camera, Radio and Other, with steering first in Driving. Each row lists the 30 wheel controls. The arrows and A and D step through the list, which the game runs. Hovering over a row and pressing a wheel control sets it in one press, which this script adds, from the pause menu only.
+
+- A control that's chosen on another row moves, as on the old page.
+- The bindings get one fill from the mod's saved values. Restore Defaults uses defaults in the tab's data, taken from the user's bindings.
+- Rows with 30 values may draw too many dots under their value. The value's plain text label goes through the same cleanup as the others.
+- The list's control names are checked against `scripts/settings_tab.py` by a Rust test, as is each row's place in the tab.
+- The old WHEEL SETTINGS page stays until this is proven.

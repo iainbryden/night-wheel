@@ -199,6 +199,113 @@ pub fn slider_adjust(index: i32, steps: i32, config: &mut Config) -> bool {
     *config != before
 }
 
+const fn button(usage: u16) -> Option<Control> {
+    Some(Control::Button(ButtonId {
+        page: BUTTON_PAGE,
+        usage,
+    }))
+}
+
+/// The controls each binding row in the game's Settings menu can choose, in that row's order.
+/// `scripts/settings_tab.py` has the same list by name, and a test checks that the two match.
+pub const CONTROL_LIST: [Option<Control>; 30] = [
+    None,
+    button(1),
+    button(2),
+    button(3),
+    button(4),
+    Some(Control::Hat(0)),
+    Some(Control::Hat(2)),
+    Some(Control::Hat(4)),
+    Some(Control::Hat(6)),
+    button(5),
+    button(6),
+    button(7),
+    button(8),
+    button(11),
+    button(12),
+    button(9),
+    button(10),
+    button(20),
+    button(21),
+    button(22),
+    button(23),
+    button(24),
+    button(25),
+    button(13),
+    button(14),
+    button(15),
+    button(16),
+    button(17),
+    button(18),
+    button(19),
+];
+
+/// The saved name of the function on a row.
+pub fn row_key(row: usize) -> &'static str {
+    ROWS.get(row).map_or("", |(action, _)| action.key())
+}
+
+/// The group a row belongs to in the game's Settings menu.
+pub fn row_group(row: usize) -> String {
+    let title = SECTIONS
+        .iter()
+        .rev()
+        .find(|(start, _, _)| *start <= row)
+        .map_or("", |(_, title, _)| title);
+    format!("/wheel/{}", title.to_lowercase())
+}
+
+/// Where a row's control sits in the list. A control not on the list counts as not bound.
+pub fn row_list_index(row: usize, bindings: &Bindings) -> i32 {
+    let Some((action, _)) = ROWS.get(row) else {
+        return 0;
+    };
+    let bound = bindings.get(*action);
+    CONTROL_LIST
+        .iter()
+        .position(|control| *control == bound)
+        .unwrap_or(0) as i32
+}
+
+/// Sets a row from the list, taking the control from any function that had it. Returns true when
+/// the bindings changed.
+pub fn row_set_list_index(row: usize, index: i32, bindings: &mut Bindings) -> bool {
+    let (Some((action, _)), Some(chosen)) = (
+        ROWS.get(row),
+        usize::try_from(index)
+            .ok()
+            .and_then(|at| CONTROL_LIST.get(at)),
+    ) else {
+        return false;
+    };
+    if bindings.get(*action) == *chosen {
+        return false;
+    }
+    match chosen {
+        Some(control) => {
+            for other in bindings.conflicts(*action, *control) {
+                bindings.clear(other);
+            }
+            bindings.assign(*action, *control);
+        }
+        None => bindings.clear(*action),
+    }
+    true
+}
+
+/// The list position of the first listed control among `pressed`, as control bits.
+pub fn list_index_of_pressed(pressed: u64) -> Option<i32> {
+    CONTROL_LIST
+        .iter()
+        .position(|control| {
+            control
+                .and_then(bit_for)
+                .is_some_and(|bit| pressed & bit != 0)
+        })
+        .map(|at| at as i32)
+}
+
 /// A slider's value as a plain number, for the game's own Settings menu.
 pub fn slider_number(index: i32, config: &Config) -> f64 {
     match index {
@@ -603,7 +710,77 @@ mod tests {
             steering_range: 900,
             steering_speed: None,
             settings_tab_filled: false,
+            settings_tab_bindings_filled: false,
         }
+    }
+
+    #[test]
+    fn the_control_list_matches_the_tab_script() {
+        let script = include_str!("../../../scripts/settings_tab.py");
+        let names = script
+            .split("CONTROLS = [")
+            .nth(1)
+            .and_then(|rest| rest.split(']').next())
+            .unwrap();
+        let listed: Vec<&str> = names.split('\'').skip(1).step_by(2).collect();
+        assert_eq!(listed.len(), CONTROL_LIST.len());
+        assert_eq!(listed[0], "NOT BOUND");
+        for (name, control) in listed.iter().zip(CONTROL_LIST).skip(1) {
+            assert_eq!(*name, control_name(control.unwrap()));
+        }
+    }
+
+    #[test]
+    fn every_row_has_its_place_in_the_tab_script() {
+        let script = include_str!("../../../scripts/settings_tab.py");
+        for row in 0..ROWS.len() {
+            let group = row_group(row);
+            let section = script
+                .split(&format!("'group_name': '{group}',\n        'options'"))
+                .nth(1)
+                .or_else(|| {
+                    (group == "/wheel/driving")
+                        .then(|| {
+                            script
+                                .split("'group_name': GROUP,\n        'options'")
+                                .nth(1)
+                        })
+                        .flatten()
+                })
+                .unwrap_or_else(|| panic!("{group} has no options"));
+            let section = section.split("'group_name'").next().unwrap();
+            assert!(
+                section.contains(&format!("binding('{}'", row_key(row))),
+                "{} is not in {group}",
+                row_key(row)
+            );
+        }
+    }
+
+    #[test]
+    fn a_row_sets_its_control_from_the_list_and_moves_it_from_others() {
+        let mut bindings = Bindings::default();
+        assert_eq!(row_list_index(0, &bindings), 0);
+        assert!(row_set_list_index(0, 1, &mut bindings));
+        assert_eq!(bindings.get(ROWS[0].0), Some(usage(1)));
+        assert_eq!(row_list_index(0, &bindings), 1);
+        assert!(!row_set_list_index(0, 1, &mut bindings), "no change");
+        assert!(row_set_list_index(1, 1, &mut bindings));
+        assert_eq!(bindings.get(ROWS[0].0), None);
+        assert_eq!(row_list_index(1, &bindings), 1);
+        assert!(row_set_list_index(1, 0, &mut bindings));
+        assert_eq!(bindings.get(ROWS[1].0), None);
+        assert!(!row_set_list_index(1, 99, &mut bindings));
+        assert!(!row_set_list_index(99, 1, &mut bindings));
+        assert!(!row_set_list_index(1, -1, &mut bindings));
+    }
+
+    #[test]
+    fn a_press_finds_its_place_in_the_list() {
+        assert_eq!(list_index_of_pressed(0), None);
+        assert_eq!(list_index_of_pressed(1), Some(1));
+        assert_eq!(list_index_of_pressed(HAT_LEFT << HAT_SHIFT), Some(8));
+        assert_eq!(list_index_of_pressed(DIAL), Some(19));
     }
 
     #[test]

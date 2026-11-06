@@ -56,6 +56,8 @@ pub struct Config {
     /// Whether the game's Settings tab has had its one fill from these values. After that, the tab
     /// holds the player's choices.
     pub settings_tab_filled: bool,
+    /// The same, for the tab's binding rows.
+    pub settings_tab_bindings_filled: bool,
 }
 
 /// Boost strength when none has been chosen.
@@ -164,6 +166,7 @@ impl Config {
             steering_range: DEFAULT_STEERING_RANGE,
             steering_speed: None,
             settings_tab_filled: false,
+            settings_tab_bindings_filled: false,
         };
         if let Some(previous) = previous {
             config.steering.deadzone = previous.steering.deadzone;
@@ -184,6 +187,7 @@ impl Config {
             config.steering_range = previous.steering_range;
             config.steering_speed = previous.steering_speed;
             config.settings_tab_filled = previous.settings_tab_filled;
+            config.settings_tab_bindings_filled = previous.settings_tab_bindings_filled;
         }
         config
     }
@@ -283,6 +287,7 @@ impl Config {
             steering_range: GHUB_NEUTRAL_RANGE,
             steering_speed: None,
             settings_tab_filled: false,
+            settings_tab_bindings_filled: false,
         };
         // Files saved before boost existed have no strength, and that is not an error.
         if fields.values.contains_key("boost.percent") {
@@ -297,6 +302,9 @@ impl Config {
         }
         if fields.values.contains_key("settings.tab_filled") {
             config.settings_tab_filled = fields.take("settings.tab_filled")?;
+        }
+        if fields.values.contains_key("settings.tab_bindings_filled") {
+            config.settings_tab_bindings_filled = fields.take("settings.tab_bindings_filled")?;
         }
         for (key, value) in fields.values {
             if key
@@ -366,6 +374,9 @@ impl Config {
         }
         if self.settings_tab_filled {
             text.push_str("settings.tab_filled = true\n");
+        }
+        if self.settings_tab_bindings_filled {
+            text.push_str("settings.tab_bindings_filled = true\n");
         }
         for (action, control) in self.bindings.iter() {
             text.push_str(&format!("{BINDING_PREFIX}{} = {control}\n", action.key()));
@@ -743,6 +754,7 @@ mod tests {
             steering_range: GHUB_NEUTRAL_RANGE,
             steering_speed: None,
             settings_tab_filled: false,
+            settings_tab_bindings_filled: false,
             steering: SteeringCalibration {
                 left: -100,
                 center: 3,

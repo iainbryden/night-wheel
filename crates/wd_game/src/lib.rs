@@ -33,8 +33,8 @@ static SETTINGS: Mutex<Option<Config>> = Mutex::new(None);
 static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
-const VERSION_MINOR: u16 = 25;
-const VERSION_PATCH: u32 = 2;
+const VERSION_MINOR: u16 = 26;
+const VERSION_PATCH: u32 = 0;
 
 struct NightWheel;
 
@@ -84,6 +84,22 @@ impl Plugin for NightWheel {
             GlobalExport(global!(c"NightWheel_SliderSet", slider_set)),
             GlobalExport(global!(c"NightWheel_TabFilled", tab_filled)),
             GlobalExport(global!(c"NightWheel_MarkTabFilled", mark_tab_filled)),
+            GlobalExport(global!(
+                c"NightWheel_TabBindingsFilled",
+                tab_bindings_filled
+            )),
+            GlobalExport(global!(
+                c"NightWheel_MarkTabBindingsFilled",
+                mark_tab_bindings_filled
+            )),
+            GlobalExport(global!(c"NightWheel_RowKey", row_key)),
+            GlobalExport(global!(c"NightWheel_RowGroup", row_group)),
+            GlobalExport(global!(c"NightWheel_RowListIndex", row_list_index)),
+            GlobalExport(global!(c"NightWheel_RowSetListIndex", row_set_list_index)),
+            GlobalExport(global!(
+                c"NightWheel_TakePressedListIndex",
+                take_pressed_list_index
+            )),
             GlobalExport(global!(c"NightWheel_ScreenHints", screen_hints)),
         ]
     }
@@ -409,9 +425,65 @@ fn mark_tab_filled() {
     }
 }
 
-/// Applies range and curve at once, and saves.
+fn tab_bindings_filled() -> bool {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .is_some_and(|config| config.settings_tab_bindings_filled)
+}
+
+fn mark_tab_bindings_filled() {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(config) = settings.as_mut() {
+        config.settings_tab_bindings_filled = true;
+        steering_changed(config);
+    }
+}
+
+fn row_key(row: i32) -> String {
+    settings::row_key(usize::try_from(row).unwrap_or(usize::MAX)).to_owned()
+}
+
+fn row_group(row: i32) -> String {
+    settings::row_group(usize::try_from(row).unwrap_or(usize::MAX))
+}
+
+fn row_list_index(row: i32) -> i32 {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map_or(0, |config| {
+            settings::row_list_index(usize::try_from(row).unwrap_or(usize::MAX), &config.bindings)
+        })
+}
+
+/// Takes a binding from the game's own Settings menu. A control that moves from another function is
+/// picked up by the script's next look at that row.
+fn row_set_list_index(row: i32, index: i32) {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(config) = settings.as_mut()
+        && settings::row_set_list_index(
+            usize::try_from(row).unwrap_or(usize::MAX),
+            index,
+            &mut config.bindings,
+        )
+    {
+        steering_changed(config);
+    }
+}
+
+/// The list position of a wheel control pressed since the last look, or -1 for none.
+fn take_pressed_list_index() -> i32 {
+    let (_, pressed) = shared::controls_for_screen();
+    settings::list_index_of_pressed(pressed).unwrap_or(-1)
+}
+
+/// Applies range, curve and bindings at once, and saves.
 fn steering_changed(config: &Config) {
     shared::set_tuning(drive::Tuning::of(config));
+    shared::set_row_bits(&config.bindings);
     let saved = config::profile_path()
         .ok_or_else(|| "no settings folder".to_owned())
         .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
