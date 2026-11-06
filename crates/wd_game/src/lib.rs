@@ -34,7 +34,7 @@ static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
 const VERSION_MINOR: u16 = 26;
-const VERSION_PATCH: u32 = 1;
+const VERSION_PATCH: u32 = 2;
 
 struct NightWheel;
 

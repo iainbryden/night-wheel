@@ -144,3 +144,9 @@ The game's Key Bindings rows aren't an option. Their data is `is_input: true` an
 ### Fixes
 
 Version 0.26.1, not run in the game. The list row's `Refresh` now writes the value text and hides the dots for `/wheel/` rows. Each hover starts a looping animation on that row, which checks for a press, and it should work from the main menu as well. The log notes each hover and each press.
+
+### Run of 0.26.1, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run42.log`. Row values show, and one press sets a free control, per the user. Pressing a control already in use left the row at NOT BOUND, and the user asked how to unbind.
+
+The cause was in `SyncTabBindings`. It applied changes as it went, so a control taken from a later row made that row look changed too, and it took the control back. Version 0.26.2 finds the changed rows first and then applies them. Delete now unbinds a hovered row.

@@ -465,14 +465,21 @@ public class NightWheelService extends ScriptableService {
             NightWheel_MarkTabBindingsFilled();
             NightWheel_Event("settings tab: bindings filled once from saved values");
         }
+        // Finds what the player changed before applying any of it. Applying one change can take a
+        // control from another row, and that row must not then look like a change of its own.
+        let changed: array<Int32>;
         row = 0;
         while row < count {
             let setting = this.RowSetting(row);
             if IsDefined(setting) && setting.GetIndex() != NightWheel_RowListIndex(row) {
-                NightWheel_Event(s"settings tab: \(NightWheel_RowKey(row)) is now \(setting.GetIndex())");
-                NightWheel_RowSetListIndex(row, setting.GetIndex());
+                ArrayPush(changed, row);
             }
             row += 1;
+        }
+        for changedRow in changed {
+            let setting = this.RowSetting(changedRow);
+            NightWheel_Event(s"settings tab: \(NightWheel_RowKey(changedRow)) is now \(setting.GetIndex())");
+            NightWheel_RowSetListIndex(changedRow, setting.GetIndex());
         }
         let moved = false;
         row = 0;
@@ -553,6 +560,10 @@ public class NightWheelService extends ScriptableService {
             return;
         }
         NightWheel_Event(s"settings tab: wheel press set \(NameToString(this.m_hoveredRow.GetName())) to \(index)");
+        this.SetHoveredRowIndex(index);
+    }
+
+    private func SetHoveredRowIndex(index: Int32) {
         this.m_hoveredRow.SetIndex(index);
         let settings = GameInstance.GetSettingsSystem(GetGameInstance());
         if settings.NeedsConfirmation() {
@@ -578,9 +589,17 @@ public class NightWheelService extends ScriptableService {
         }
     }
 
-    // Keys only matter while the settings page is open.
+    // Delete unbinds a hovered row in the WHEEL tab. Other keys only matter while the settings page
+    // is open.
     private cb func OnKey(event: ref<KeyInputEvent>) {
-        if NotEquals(event.GetAction(), EInputAction.IACT_Press) || !this.m_paused || !this.IsScreenOpen() {
+        if NotEquals(event.GetAction(), EInputAction.IACT_Press) {
+            return;
+        }
+        if IsDefined(this.m_hoveredRow) && Equals(event.GetKey(), EInputKey.IK_Delete) {
+            this.SetHoveredRowIndex(0);
+            return;
+        }
+        if !this.m_paused || !this.IsScreenOpen() {
             return;
         }
         switch event.GetKey() {

@@ -37,7 +37,7 @@ CONTROLS = [
     'BUTTON 13', 'BUTTON 14', 'BUTTON 15', 'BUTTON 16', 'BUTTON 17', 'BUTTON 18', 'BUTTON 19',
 ]
 
-BIND_HELP = 'Hover here and press a wheel control to set it, or use the arrows.'
+BIND_HELP = 'Hover here and press a wheel control to set it, or use the arrows. Delete unbinds it.'
 
 
 def option(name, label, description, order, kind, default, low, high, step):
