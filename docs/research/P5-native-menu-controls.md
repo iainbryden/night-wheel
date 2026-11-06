@@ -158,3 +158,21 @@ Approved by the user; files replaced and checksums verified. Log kept as `out/ga
 ### Help text
 
 Version 0.26.3, not run in the game. Each section header now says how to set and clear a row. The game's hover help panel didn't show the rows' plain text descriptions, so the script writes them to `m_descriptionText` on hover.
+
+### Run of 0.26.3, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. User report: hover help appears but doesn't explain the functions. Binding and unbinding work as expected, and the arrows and sliders work.
+
+### Help text and HUD toggle
+
+Version 0.27.0, not run in the game. Each row's help now says what its function does, and Boost and flight describe their rules. A new HUD on/off row hides the game's `inkHUDLayer` window through Codeware's `inkSystem.GetLayer` and `GetVirtualWindow`. Those calls are proven only by compiling. The wheel's controls only reach the script while driving, so leaving the driver seat or the session brings the HUD back.
+
+### Translations
+
+The game's option data takes localization keys as display names, and the game's own vehicle bindings use them (for example `LocKey#77870` for its horn binding), so those labels could come translated for free. Text unique to this mod has no translation anywhere. Codeware's `ModLocalizationProvider` can supply it per language. The wording of those game keys isn't checked, and no translation work has been done.
+
+### Run of 0.27.0, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run45.log`. User report: "looks good." One press bound HUD on/off to RED ENTER, which took that control from Lights, and the log shows the toggle firing in both directions across two sessions.
+
+When the session ended with the HUD hidden, the log shows `hud: layer not found`, because the layer had already gone. The script then treats the HUD as shown, and the next session's toggling behaved normally in the log. The report doesn't separate the individual checks, so a HUD hidden completely, dialogue choices and the return on leaving the car aren't recorded one by one.

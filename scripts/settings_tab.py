@@ -38,7 +38,7 @@ CONTROLS = [
     'BUTTON 13', 'BUTTON 14', 'BUTTON 15', 'BUTTON 16', 'BUTTON 17', 'BUTTON 18', 'BUTTON 19',
 ]
 
-BIND_HELP = 'Hover here and press a wheel control to set it, or use the arrows. Delete unbinds it.'
+BIND_HELP = 'To set this, press a wheel control while hovering here. DELETE clears it.'
 
 
 def option(name, label, description, order, kind, default, low, high, step):
@@ -60,11 +60,11 @@ def option(name, label, description, order, kind, default, low, high, step):
     }
 
 
-def binding(key, label, order, default='NOT BOUND'):
+def binding(key, label, what, order, default='NOT BOUND'):
     return {
         'name': key,
         'display_name': label,
-        'description': BIND_HELP,
+        'description': what + ' ' + BIND_HELP,
         'order': order,
         'is_visible': True,
         'in_pre_game': True,
@@ -82,56 +82,68 @@ OPTIONS = [
     {
         'group_name': GROUP,
         'options': [
-            option('SteeringRange', 'Steering range', 'Degrees of wheel turn from full left to full right. '
-                   'Assumes G HUB is set to 900.', 0, 'int', 360, 180, 900, 30),
-            option('CenterResponse', 'Center response', 'Higher values soften steering near center.',
-                   1, 'float', 1.0, 1.0, 4.0, 0.1),
-            option('SteeringSpeed', 'Steering speed', 'How quickly the tires follow the wheel. '
-                   'Applies at the next game start.', 2, 'int', 2, 1, 10, 1),
-            binding('handbrake', 'Handbrake', 3, 'LEFT PADDLE'),
-            binding('horn', 'Horn', 4),
-            binding('lights', 'Lights', 5, 'R2'),
-            binding('vehicle_exit', 'Exit vehicle', 6),
-            binding('autodrive', 'Autodrive', 7, 'CIRCLE'),
-            binding('combat_mode', 'Combat mode', 8, 'SQUARE'),
-            binding('boost', 'Boost', 9, 'L3'),
-            option('BoostStrength', 'Boost strength', 'How far boost can raise the speed, as a percentage.',
-                   10, 'int', 25, 25, 200, 5),
+            option('SteeringRange', 'Steering range', 'How far the wheel turns, in degrees from full left to '
+                   'full right, to reach full steering. Lower values make the car respond to less wheel '
+                   'movement. Assumes G HUB is set to 900.', 0, 'int', 360, 180, 900, 30),
+            option('CenterResponse', 'Center response', 'How gentle steering is near center. 1.0 is direct. '
+                   'Higher values soften small movements and still reach full steering at the end of the '
+                   'range.', 1, 'float', 1.0, 1.0, 4.0, 0.1),
+            option('SteeringSpeed', 'Steering speed', 'How quickly the tires follow the wheel. Higher values '
+                   'feel sharper. Applies the next time the game starts.', 2, 'int', 2, 1, 10, 1),
+            binding('handbrake', 'Handbrake', "Applies the game's handbrake, for sharp turns and slides.",
+                    3, 'LEFT PADDLE'),
+            binding('horn', 'Horn', 'Sounds the horn.', 4),
+            binding('lights', 'Lights', "Changes the car's lights.", 5, 'R2'),
+            binding('vehicle_exit', 'Exit vehicle', 'Gets out of the car.', 6),
+            binding('autodrive', 'Autodrive', "Turns the game's Autodrive on or off. Boost and flight don't "
+                    'work while it drives.', 7, 'CIRCLE'),
+            binding('combat_mode', 'Combat mode', "Switches to the game's combat mode in the car.", 8, 'SQUARE'),
+            binding('boost', 'Boost', 'Hold for a burst of extra speed lasting up to 5 seconds. Letting go or '
+                    'touching the brake ends it early. Either way, boost is then unavailable for 3 seconds, '
+                    'and the next burst takes a new press. Works on the road and in flight.', 9, 'L3'),
+            option('BoostStrength', 'Boost strength', 'How far boost can raise your speed, as a percentage above '
+                   'the fastest speed reached in this car without boost. Higher values also push harder and '
+                   "raise flight's boosted top speed.", 10, 'int', 25, 25, 200, 5),
         ],
     },
     {
         'group_name': '/wheel/flight',
         'options': [
-            binding('fly_up', 'Climb / start flight', 0, 'PLUS'),
-            binding('fly_down', 'Descend / land', 1, 'MINUS'),
+            binding('fly_up', 'Climb / start flight', 'Press once to lift the car off the ground and fly. Hold '
+                    'to climb. In flight, the wheel turns, the throttle speeds up and the brake slows down. '
+                    'The car can pass through buildings.', 0, 'PLUS'),
+            binding('fly_down', 'Descend / land', 'Hold to go down. Keep holding for half a second at the '
+                    'ground to land and return to normal driving.', 1, 'MINUS'),
         ],
     },
     {
         'group_name': '/wheel/camera',
         'options': [
-            binding('camera_change', 'Change camera', 0, 'D-PAD UP'),
-            binding('rear_view', 'Look behind', 1, 'D-PAD DOWN'),
-            binding('camera_reset', 'Reset camera', 2),
-            binding('zoom_in', 'Zoom in', 3, 'D-PAD RIGHT'),
-            binding('zoom_out', 'Zoom out', 4, 'D-PAD LEFT'),
+            binding('camera_change', 'Change camera', 'Switches to the next driving camera.', 0, 'D-PAD UP'),
+            binding('rear_view', 'Look behind', 'Looks behind the car.', 1, 'D-PAD DOWN'),
+            binding('camera_reset', 'Reset camera', 'Puts the camera back behind the car.', 2),
+            binding('zoom_in', 'Zoom in', 'Zooms the camera in.', 3, 'D-PAD RIGHT'),
+            binding('zoom_out', 'Zoom out', 'Zooms the camera out.', 4, 'D-PAD LEFT'),
         ],
     },
     {
         'group_name': '/wheel/radio',
         'options': [
-            binding('radio_menu', 'Radio menu', 0, 'R3'),
-            binding('radio_toggle', 'Radio on/off', 1, 'RED ENTER'),
-            binding('radio_next', 'Next radio station', 2, 'DIAL RIGHT'),
-            binding('radio_previous', 'Previous radio station', 3, 'DIAL LEFT'),
-            binding('radio_volume_up', 'Radio volume up', 4),
-            binding('radio_volume_down', 'Radio volume down', 5),
+            binding('radio_menu', 'Radio menu', "Opens the game's radio menu.", 0, 'R3'),
+            binding('radio_toggle', 'Radio on/off', 'Turns the car radio on or off.', 1, 'RED ENTER'),
+            binding('radio_next', 'Next radio station', 'Tunes to the next station.', 2, 'DIAL RIGHT'),
+            binding('radio_previous', 'Previous radio station', 'Tunes to the previous station.', 3, 'DIAL LEFT'),
+            binding('radio_volume_up', 'Radio volume up', 'Raises the car radio volume one step.', 4),
+            binding('radio_volume_down', 'Radio volume down', 'Lowers the car radio volume one step.', 5),
         ],
     },
     {
         'group_name': '/wheel/other',
         'options': [
-            binding('scanner', 'Scanner', 0, 'PS'),
-            binding('pause_menu', 'Pause menu', 1, 'OPTIONS'),
+            binding('scanner', 'Scanner', "Uses the game's scanner.", 0, 'PS'),
+            binding('pause_menu', 'Pause menu', 'Opens the pause menu.', 1, 'OPTIONS'),
+            binding('hud_toggle', 'HUD on/off', "Hides or shows the game's HUD while you drive. It comes back "
+                    'when you leave the driver seat or load a save.', 2),
         ],
     },
 ]

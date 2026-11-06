@@ -320,6 +320,7 @@ public class NightWheelService extends ScriptableService {
     private let m_carryLogged: Float;
     private let m_flightClimbHeld: Bool;
     private let m_flightGroundHeld: Float;
+    private let m_hudHidden: Bool;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -590,6 +591,7 @@ public class NightWheelService extends ScriptableService {
     private func ResetVehicleState(reason: String) {
         this.EndBoost(reason);
         this.EndFlight(reason);
+        this.SetHudHidden(false);
         this.m_flightClimbHeld = false;
         this.m_carrying = false;
         this.m_boostButtonHeld = false;
@@ -667,6 +669,9 @@ public class NightWheelService extends ScriptableService {
             if actions != 0 {
                 this.RunRadioActions(player, actions);
             }
+            if (actions & 512) != 0 {
+                this.SetHudHidden(!this.m_hudHidden);
+            }
             this.UpdateAutopilot(player);
             this.UpdateBoostBurst();
             this.UpdateBoost(player);
@@ -677,6 +682,8 @@ public class NightWheelService extends ScriptableService {
             this.m_carrying = false;
             if !inMenu {
                 this.EndFlight("not driving");
+                // The wheel's controls only work while driving, so it couldn't bring the HUD back.
+                this.SetHudHidden(false);
             }
             if this.m_autopilot {
                 this.m_autopilot = false;
@@ -1028,6 +1035,23 @@ public class NightWheelService extends ScriptableService {
             this.m_boostCooldownEnd = this.SimNow() + 3.0;
             NightWheel_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
         }
+    }
+
+    // Hides the game's whole HUD layer at once, so its parts can't show themselves again one by one.
+    private func SetHudHidden(hidden: Bool) {
+        if Equals(hidden, this.m_hudHidden) {
+            return;
+        }
+        let layer = GameInstance.GetInkSystem().GetLayer(n"inkHUDLayer");
+        let window = IsDefined(layer) ? layer.GetVirtualWindow() : null;
+        if !IsDefined(window) {
+            NightWheel_Event("hud: layer not found");
+            this.m_hudHidden = false;
+            return;
+        }
+        window.SetVisible(!hidden);
+        this.m_hudHidden = hidden;
+        NightWheel_Event(s"hud: hidden=\(hidden)");
     }
 
     // Radio functions with no gamepad button. Each logs what it did, because these are game

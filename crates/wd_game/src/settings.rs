@@ -39,10 +39,11 @@ const SCRIPT_VOLUME_DOWN: u32 = 16 << SCRIPT_SHIFT;
 pub const SCRIPT_BOOST: u32 = 32 << SCRIPT_SHIFT;
 const SCRIPT_FLY_UP: u32 = 128 << SCRIPT_SHIFT;
 const SCRIPT_FLY_DOWN: u32 = 256 << SCRIPT_SHIFT;
+const SCRIPT_HUD_TOGGLE: u32 = 512 << SCRIPT_SHIFT;
 
 /// The functions on the screen and how each one reaches the game. Gamepad pairs come from the
 /// game's `inputContexts.xml` and `inputUserMappings.xml` on patch 2.5 (SRC-032).
-pub const ROWS: [(Action, u32); 22] = [
+pub const ROWS: [(Action, u32); 23] = [
     (Action::Handbrake, PAD_A),
     (Action::Horn, PAD_X),
     (Action::Lights, PAD_DPAD_LEFT),
@@ -52,6 +53,7 @@ pub const ROWS: [(Action, u32); 22] = [
     (Action::Boost, SCRIPT_BOOST),
     (Action::Scanner, PAD_LEFT_SHOULDER),
     (Action::PauseMenu, PAD_START),
+    (Action::HudToggle, SCRIPT_HUD_TOGGLE),
     (Action::FlyUp, SCRIPT_FLY_UP),
     (Action::FlyDown, SCRIPT_FLY_DOWN),
     (Action::CameraChange, PAD_DPAD_RIGHT),
@@ -74,9 +76,9 @@ pub const BOOST_ROW: usize = 6;
 const SECTIONS: [(usize, &str, usize); 5] = [
     (0, "Driving", 0),
     (7, "Other", 0),
-    (9, "Flight", 1),
-    (11, "Camera", 1),
-    (16, "Radio", 1),
+    (10, "Flight", 1),
+    (12, "Camera", 1),
+    (17, "Radio", 1),
 ];
 
 /// The title of the section that starts at a row, if one does.
@@ -732,7 +734,8 @@ mod tests {
 
     #[test]
     fn every_row_has_its_place_in_the_tab_script() {
-        let script = include_str!("../../../scripts/settings_tab.py");
+        // A checkout on Windows may have either line ending.
+        let script = include_str!("../../../scripts/settings_tab.py").replace("\r\n", "\n");
         for row in 0..ROWS.len() {
             let group = row_group(row);
             let section = script
@@ -1005,24 +1008,25 @@ mod tests {
     #[test]
     fn sections_start_where_they_should() {
         assert_eq!(section_at(0), "Driving");
-        assert_eq!(section_at(11), "Camera");
-        assert_eq!(section_at(16), "Radio");
+        assert_eq!(section_at(12), "Camera");
+        assert_eq!(section_at(17), "Radio");
         assert_eq!(section_at(1), "");
         assert_eq!(section_at(7), "Other");
-        assert_eq!(section_at(9), "Flight");
+        assert_eq!(section_at(10), "Flight");
         assert_eq!(ROWS[7].0, Action::Scanner);
-        assert_eq!(ROWS[9].0, Action::FlyUp);
-        assert_eq!(ROWS[11].0, Action::CameraChange);
-        assert_eq!(ROWS[16].0, Action::RadioMenu);
+        assert_eq!(ROWS[9].0, Action::HudToggle);
+        assert_eq!(ROWS[10].0, Action::FlyUp);
+        assert_eq!(ROWS[12].0, Action::CameraChange);
+        assert_eq!(ROWS[17].0, Action::RadioMenu);
         assert_eq!(ROWS[BOOST_ROW].0, Action::Boost);
     }
 
     #[test]
     fn rows_fall_in_their_section_column() {
         assert_eq!(column_of(0), 0);
-        assert_eq!(column_of(8), 0);
-        assert_eq!(column_of(9), 1);
-        assert_eq!(column_of(21), 1);
+        assert_eq!(column_of(9), 0);
+        assert_eq!(column_of(10), 1);
+        assert_eq!(column_of(22), 1);
     }
 
     #[test]

@@ -35,11 +35,12 @@ pub enum Action {
     Scanner,
     FlyUp,
     FlyDown,
+    HudToggle,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -66,6 +67,7 @@ impl Action {
         Self::Scanner,
         Self::FlyUp,
         Self::FlyDown,
+        Self::HudToggle,
     ];
 
     /// Stable name used in saved settings. Do not change once released.
@@ -97,6 +99,7 @@ impl Action {
             Self::Scanner => "scanner",
             Self::FlyUp => "fly_up",
             Self::FlyDown => "fly_down",
+            Self::HudToggle => "hud_toggle",
         }
     }
 
@@ -129,6 +132,7 @@ impl Action {
             Self::Scanner => "Scanner",
             Self::FlyUp => "Climb / start flight",
             Self::FlyDown => "Descend / land",
+            Self::HudToggle => "HUD on/off",
         }
     }
 
