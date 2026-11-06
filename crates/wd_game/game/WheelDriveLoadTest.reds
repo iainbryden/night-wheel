@@ -161,6 +161,8 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_flightVX: Float;
     private let m_flightVY: Float;
     private let m_flightVZ: Float;
+    private let m_flightClimbHeld: Bool;
+    private let m_flightGroundHeld: Float;
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
@@ -393,26 +395,22 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         let game = GetGameInstance();
+        // A fresh press of Climb starts flight when it is off, or takes back a landing.
+        let held = WheelDriveTest_ScriptHeld();
+        let climbHeld = (held & 128) != 0;
+        let descendHeld = (held & 256) != 0;
+        let climbPressed = climbHeld && !this.m_flightClimbHeld;
+        this.m_flightClimbHeld = climbHeld;
         if toggled {
             if this.m_flying && !this.m_landing {
                 this.m_landing = true;
                 WheelDriveTest_Event("flight: landing");
             } else {
-                let begin = vehicle.GetWorldPosition();
-                let moving = vehicle.GetLinearVelocity();
-                this.m_flying = true;
-                this.m_landing = false;
-                this.m_flightStart = begin.Z;
-                this.m_flightTarget = begin.Z + 15.0;
-                this.m_flightX = begin.X;
-                this.m_flightY = begin.Y;
-                this.m_flightZ = begin.Z;
-                this.m_flightVX = moving.X;
-                this.m_flightVY = moving.Y;
-                this.m_flightVZ = 0.0;
-                this.m_flightLastYaw = vehicle.GetWorldYaw();
-                this.m_flightYawRate = 0.0;
-                WheelDriveTest_Event(s"flight: on at height \(FloatToString(begin.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
+                this.StartFlight(vehicle);
+            }
+        } else {
+            if climbPressed && !this.m_autopilot && (!this.m_flying || this.m_landing) {
+                this.StartFlight(vehicle);
             }
         }
         let now = EngineTime.ToFloat(GameInstance.GetSimTime(game));
@@ -461,11 +459,10 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_flightVY = aheadY * along + sideY * across;
 
         // Height.
-        let held = WheelDriveTest_ScriptHeld();
-        if (held & 128) != 0 {
+        if climbHeld {
             this.m_flightTarget += 15.0 * elapsed;
         }
-        if (held & 256) != 0 {
+        if descendHeld {
             this.m_flightTarget -= 15.0 * elapsed;
         }
         this.m_flightTarget = ClampF(this.m_flightTarget, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
@@ -479,17 +476,15 @@ public class WheelDriveTestService extends ScriptableService {
         let z = this.m_flightZ + this.m_flightVZ * elapsed;
 
         // The ground below.
-        let trace: TraceResult;
         let from = new Vector4(x, y, z + 1.0, 1.0);
         let to = new Vector4(x, y, z - 200.0, 1.0);
-        let hit = GameInstance.GetSpatialQueriesSystem(game).SyncRaycastByCollisionGroup(from, to, n"Static", trace, true, false);
-        let groundKnown = hit && TraceResult.IsValid(trace);
+        let groundZ = MaxF(this.GroundHeight(from, to, n"Static"), this.GroundHeight(from, to, n"Terrain"));
+        let groundKnown = groundZ > -99999.0;
         let clearance = 999.0;
         if groundKnown {
-            let point = trace.position;
-            clearance = z - point.Z;
+            clearance = z - groundZ;
             if clearance < 0.8 {
-                z = point.Z + 0.8;
+                z = groundZ + 0.8;
                 this.m_flightTarget = MaxF(this.m_flightTarget, z);
                 if this.m_flightVZ < 0.0 {
                     this.m_flightVZ = 0.0;
@@ -500,6 +495,17 @@ public class WheelDriveTestService extends ScriptableService {
         if this.m_landing && (clearance < 1.2 || (!groundKnown && z <= this.m_flightStart)) {
             this.EndFlight("landed");
             return;
+        }
+        // Holding Descend at the ground for half a second ends flight. A ray has to see the
+        // ground, so this never drops the car from the air.
+        if descendHeld && clearance < 1.2 {
+            this.m_flightGroundHeld += elapsed;
+            if this.m_flightGroundHeld >= 0.5 {
+                this.EndFlight("descend held at ground");
+                return;
+            }
+        } else {
+            this.m_flightGroundHeld = 0.0;
         }
         this.m_flightX = x;
         this.m_flightY = y;
@@ -517,9 +523,42 @@ public class WheelDriveTestService extends ScriptableService {
 
         if now - this.m_flightLogged >= 1.0 {
             this.m_flightLogged = now;
+            if !groundKnown {
+                WheelDriveTest_Event(s"flight: no ground found at height \(FloatToString(z))");
+            }
             let physics = vehicle.GetLinearVelocity();
             WheelDriveTest_Event(s"flight: up \(FloatToString(z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), clearance \(FloatToString(clearance)), rise \(FloatToString(this.m_flightVZ)), along \(FloatToString(along)), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), actual z error \(FloatToString(actual.Z - z)), physics rise \(FloatToString(physics.Z))");
         }
+    }
+
+    // The height a ray hits in one collision group, or a very low value if it hits nothing.
+    private func GroundHeight(from: Vector4, to: Vector4, group: CName) -> Float {
+        let trace: TraceResult;
+        let hit = GameInstance.GetSpatialQueriesSystem(GetGameInstance()).SyncRaycastByCollisionGroup(from, to, group, trace, true, false);
+        if hit && TraceResult.IsValid(trace) {
+            let point = trace.position;
+            return point.Z;
+        }
+        return -100000.0;
+    }
+
+    private func StartFlight(vehicle: ref<VehicleObject>) {
+        let begin = vehicle.GetWorldPosition();
+        let moving = vehicle.GetLinearVelocity();
+        this.m_flying = true;
+        this.m_landing = false;
+        this.m_flightStart = begin.Z;
+        this.m_flightTarget = begin.Z + 3.0;
+        this.m_flightX = begin.X;
+        this.m_flightY = begin.Y;
+        this.m_flightZ = begin.Z;
+        this.m_flightVX = moving.X;
+        this.m_flightVY = moving.Y;
+        this.m_flightVZ = 0.0;
+        this.m_flightLastYaw = vehicle.GetWorldYaw();
+        this.m_flightYawRate = 0.0;
+        this.m_flightGroundHeld = 0.0;
+        WheelDriveTest_Event(s"flight: on at height \(FloatToString(begin.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
     }
 
     private func Push(vehicle: ref<VehicleObject>, at: Vector4, x: Float, y: Float, z: Float) {

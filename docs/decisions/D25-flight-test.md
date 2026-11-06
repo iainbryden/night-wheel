@@ -85,6 +85,62 @@ Assumptions to check: `EulerAngles.Yaw` matches `GetWorldYaw`, the ray's argumen
 
 Checks: 146 of 146 tests passed and lints were clean before a final script-only change, and the final script compiled against a copy of the game's `final.redscripts`.
 
+## Fourth run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: "flight model is good", but lift-off goes higher than needed. This build is the reference to return to. Log kept as `out/game-before/load-test-run24.log`. No new crash report appeared.
+
+- **Position control holds.** Over about 30 flights, height stayed on target when no height control was held, and the actual height stayed within about 1 metre of the simulated height, with a few readings up to about 2.
+- **The ground ray often finds nothing.** Of 1938 logged samples, 1109 found no ground. Many of those are high up, but 161 were within 20 metres of the flight's start height, so the ray misses some surfaces within its 200 metre range. Which surfaces isn't known.
+- **A landing can end in mid-air.** With no ground found, a landing ends at the start height and the car drops. In one flight it ended about 110 in world height, and two seconds later flight began again about 25 metres lower. That is close to a free fall. Another run shows about -35 m/s of vertical speed at the next start.
+- **Resting clearance.** Parked, the ray reads about 0.25 to 0.36 metres, so a landing that ends at the 0.8 metre floor drops about half a metre.
+
+## Fifth build: lower lift-off
+
+Script change only. Lift-off goes to 5 metres instead of 15. `wd_game.dll` is unchanged at plugin 0.20.0, SHA-256 `8a3646d5ed0a8f874a1f155188f5e9ec4ff2e9b06c047bb7d8b4f7826ef257f6`; `WheelDriveLoadTest.reds` SHA-256 `1e440e03375616ad9e1756a89e8c3f2156ad415ca8411f97a5e4e546155ce589`. Never installed or run in the game, and replaced by the sixth build. The script compiled against a copy of the game's `final.redscripts`.
+
+## Sixth build: Climb and Descend start and end flight
+
+Chosen by the user, who first declined the idea and then asked to try it. Script change only. `wd_game.dll` is unchanged at plugin 0.20.0, SHA-256 `8a3646d5ed0a8f874a1f155188f5e9ec4ff2e9b06c047bb7d8b4f7826ef257f6`; `WheelDriveLoadTest.reds` SHA-256 `25dc91ca4b6bbd8d3d861bb26e10f617462713f37f285e1c4941fbf1f7e66929`. Staged in `out/flight6-test/`. Not run in the game. The script compiled against a copy of the game's `final.redscripts`. The Rust tests weren't rerun, because no Rust changed.
+
+- A fresh press of Climb starts flight when it is off, or takes back a landing. Lift-off goes to 3 metres, and holding Climb keeps rising.
+- Holding Descend with clearance under 1.2 metres for half a second ends flight, so it can't drop the car from the air.
+- The flight mode button still works as before, with the same 3 metre lift-off and the same landing. It stays as a way out where the ray can't see the ground, and the mid-air landing above still applies to it.
+- When the `Static` ray misses, the log tries `Terrain`, `Water`, `Road` and `World Static`, once a second. These names appear in the game's script file, but whether each is a collision group isn't known.
+- Speed still isn't carried over when flight ends, so ending flight while moving fast stops the car abruptly.
+
+## Sixth run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: the combined buttons don't work well, because Descend often sends the car below the surface. The user asked to go back to the single mode button and keep the lower lift-off. Log kept as `out/game-before/load-test-run25.log`. No new crash report appeared.
+
+- **Likely cause.** The ground check only looked at `Static`. Of 313 logged misses, the `Terrain` ray hit in 274, sometimes less than a metre below the car. So there was no floor over those surfaces. `Water` hit in 7. `Road` and `World Static` never hit.
+- **Not new.** Descend's movement code didn't change in the sixth build, so the same gap was there before. Using Descend to reach the ground each time may be why it showed up now. That part isn't proven.
+- **Still unseen.** 39 of the 313 misses found nothing in `Terrain` either.
+
+## Seventh build: back to one mode button
+
+Script change only. `wd_game.dll` is unchanged at plugin 0.20.0, SHA-256 `8a3646d5ed0a8f874a1f155188f5e9ec4ff2e9b06c047bb7d8b4f7826ef257f6`; `WheelDriveLoadTest.reds` SHA-256 `5b18947c653da52596c3f8bf344a0729ac142c015aa1af454b5dc2973c8f12c0`. Staged in `out/flight7-test/`. Not run in the game. The script compiled against a copy of the game's `final.redscripts`. Compared with the fourth build, which the user liked, only two things differ:
+
+- Lift-off goes to 3 metres instead of 15.
+- The ground check takes the higher of the `Static` and `Terrain` hits, so the floor and landings should also work over terrain.
+
+Climb and Descend only change height again. The mid-air landing still applies where neither ray finds ground. Never installed, and kept staged as the fallback.
+
+## Eighth build: two buttons with the floor fix
+
+Chosen by the user, to test whether the floor bug was the real problem with the sixth build. Script change only. `wd_game.dll` is unchanged at plugin 0.20.0, SHA-256 `8a3646d5ed0a8f874a1f155188f5e9ec4ff2e9b06c047bb7d8b4f7826ef257f6`; `WheelDriveLoadTest.reds` SHA-256 `c4a15422ae9c04acf814a343e0b515a5a58355445afb03fbf34484022949576b`. Staged in `out/flight8-test/`. Not run in the game. The script compiled against a copy of the game's `final.redscripts`.
+
+- Climb starts flight and Descend ends it, as in the sixth build.
+- The ground check takes the higher of the `Static` and `Terrain` hits, as in the seventh build.
+- The flight mode button stays as a way out during this test, and is to be removed from flight if Descend proves reliable.
+- The log notes each second that neither ray finds ground. It no longer tries `Water`, `Road` or `World Static`.
+
+## Eighth run, 2026-11-05
+
+Approved by the user; files replaced and hash-checked. User report: "Works well." The car still goes through some surfaces, but not through the floor on landings, and the user accepts that. Two buttons is better than a toggle. Log kept as `out/game-before/load-test-run26.log`. No new crash report appeared.
+
+- 16 flights: 11 ended by holding Descend at the ground, and 3 by the flight mode button's landing. The mode button's landing was started 5 times.
+- There is still no check for buildings ahead, which is the likely reason for going through surfaces while flying. That cause isn't proven.
+
 ## Unknowns
 
 - Whether the car's inertia suits these values. The first version may wobble or feel wrong.
