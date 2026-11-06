@@ -180,3 +180,7 @@ Approved by the user; files replaced and checksums verified. Log kept as `out/ga
 
 - **Landing: better, and good enough for now.** User report: the car "did kind of stop" but felt better. The log shows the physics now respond. Speed starts near 0 and climbs back: a landing at 30.7 reached 30.4 about 0.7 seconds later, and slow landings reached their speed within about 0.3 seconds. So the car does stop briefly first. A stronger push could shorten that, and the climb at 30.7 was about half the 60 m/s² asked for. `PhysicsWakeUp` was part of this change, and which part made the difference isn't separated.
 - **Frame rate: the log doesn't show a drop.** Script updates a second averaged 59.3 while driving and 64.1 while flying, and showed no fall at the 4 lift-offs measured. Script updates may not match displayed frames, and the drop the user saw may be uneven pacing, which a per-second count wouldn't show. So this doesn't disprove the report. It's left as it is.
+
+## Stronger landing push
+
+Requested by the user. Version 0.21.5, not run in the game. The push after landing can now add up to 240 m/s², four times the 60 before, and stops at the speed the car flew at, so it shouldn't overshoot. Speed is logged about every 0.05 seconds. The value is provisional, and a harder push may feel like a jolt.

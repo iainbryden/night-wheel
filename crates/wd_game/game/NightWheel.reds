@@ -597,11 +597,11 @@ public class NightWheelService extends ScriptableService {
         let aheadY = forward.Y / flat;
         let moving = vehicle.GetLinearVelocity();
         let speed = moving.X * aheadX + moving.Y * aheadY;
-        let change = ClampF(this.m_carrySpeed - speed, 0.0, 60.0 * elapsed) * vehicle.GetTotalMass();
+        let change = ClampF(this.m_carrySpeed - speed, 0.0, 240.0 * elapsed) * vehicle.GetTotalMass();
         if change > 0.0 {
             this.Push(vehicle, vehicle.GetWorldPosition(), aheadX * change, aheadY * change, 0.0);
         }
-        if now - this.m_carryLogged >= 0.1 {
+        if now - this.m_carryLogged >= 0.05 {
             this.m_carryLogged = now;
             NightWheel_Event(s"landing: speed \(FloatToString(speed)), pushing \(FloatToString(change))");
         }
