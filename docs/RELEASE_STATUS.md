@@ -1,6 +1,6 @@
 # Release status
 
-Date: 2026-11-05. Version 0.21.0, on branch `review-prep`.
+Date: 2026-11-05. Version 0.21.0, on branch `main`.
 
 **Night Wheel isn't ready for release.** The code is ready for review. It is missing features the product requirements call for, and most of the required lifecycle tests have no recorded result. A public preview would need a decision to reduce the requirements for that preview.
 
