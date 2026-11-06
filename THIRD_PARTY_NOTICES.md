@@ -16,7 +16,7 @@ RED4ext, redscript, Codeware and TweakXL are separate downloads and aren't inclu
 | byteorder-lite | 0.1.0 | Unlicense OR MIT | https://github.com/image-rs/byteorder-lite |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | https://github.com/rust-lang/cfg-if |
 | color | 0.3.3 | Apache-2.0 OR MIT | https://github.com/linebender/color |
-| const-combine | 0.1.0 | Not stated |  |
+| const-combine | 0.1.0 | MIT |  |
 | const-crc32 | 1.3.0 | MIT | https://git.shipyard.rs/jstrong/const-crc32 |
 | crc32fast | 1.5.4 | MIT OR Apache-2.0 | https://github.com/srijs/rust-crc32fast |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/cursor-icon |
@@ -72,7 +72,7 @@ RED4ext, redscript, Codeware and TweakXL are separate downloads and aren't inclu
 | quote | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/raw-window-handle |
 | read-fonts | 0.41.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
-| red4ext-rs | 0.11.2 | Not stated |  |
+| red4ext-rs | 0.11.2 | MIT |  |
 | scopeguard | 1.2.0 | MIT OR Apache-2.0 | https://github.com/bluss/scopeguard |
 | sealed | 0.7.0 | MIT OR Apache-2.0 | https://github.com/jmg-duarte/sealed-rs |
 | self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | https://github.com/Voultapher/self_cell |

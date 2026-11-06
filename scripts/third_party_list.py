@@ -3,6 +3,8 @@
 import json
 import subprocess
 
+# These declare no license in their package data. The values come from reading their LICENSE files.
+LICENSE_FILES = {'const-combine': 'MIT', 'red4ext-rs': 'MIT'}
 SHIPPED = {'wd_game', 'wd_setup'}
 OWN = {'wd_core', 'wd_device', 'wd_game', 'wd_setup', 'wd_diag'}
 
@@ -28,7 +30,8 @@ while pending:
 
 rows = sorted(
     (packages[id]['name'], packages[id]['version'],
-     packages[id]['license'] or 'Not stated', packages[id]['repository'] or '')
+     packages[id]['license'] or LICENSE_FILES.get(packages[id]['name'], 'Not stated'),
+     packages[id]['repository'] or '')
     for id in seen if packages[id]['name'] not in OWN)
 
 with open('THIRD_PARTY_NOTICES.md', 'w', encoding='utf-8', newline='\n') as out:
