@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/wd_core", "crates/wd_device", "crates/wd_diag", "crates/wd_setup", "crates/wd_game"]
 
 [workspace.package]
-version = "0.26.2"
+version = "0.26.3"
 edition = "2024"
 publish = false
 license = "MIT"

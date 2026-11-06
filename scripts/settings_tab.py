@@ -18,13 +18,14 @@ RELATIVE = os.path.join('r6', 'config', 'settings', 'platform', 'pc', 'options.j
 BACKUP = 'options-pc-original.json'
 MARK = '/wheel'
 GROUP = '/wheel/driving'
+HOW_TO_BIND = ': hover a row and press a wheel control to set, DELETE to clear'
 GROUPS = [
     {'group_name': MARK, 'display_name': 'WHEEL', 'order': 10},
-    {'group_name': GROUP, 'display_name': 'Driving', 'order': 0},
-    {'group_name': '/wheel/flight', 'display_name': 'Flight', 'order': 1},
-    {'group_name': '/wheel/camera', 'display_name': 'Camera', 'order': 2},
-    {'group_name': '/wheel/radio', 'display_name': 'Radio', 'order': 3},
-    {'group_name': '/wheel/other', 'display_name': 'Other', 'order': 4},
+    {'group_name': GROUP, 'display_name': 'Driving' + HOW_TO_BIND, 'order': 0},
+    {'group_name': '/wheel/flight', 'display_name': 'Flight' + HOW_TO_BIND, 'order': 1},
+    {'group_name': '/wheel/camera', 'display_name': 'Camera' + HOW_TO_BIND, 'order': 2},
+    {'group_name': '/wheel/radio', 'display_name': 'Radio' + HOW_TO_BIND, 'order': 3},
+    {'group_name': '/wheel/other', 'display_name': 'Other' + HOW_TO_BIND, 'order': 4},
 ]
 
 # The wheel's controls, in the order the plugin expects. crates/wd_game/src/settings.rs has the same

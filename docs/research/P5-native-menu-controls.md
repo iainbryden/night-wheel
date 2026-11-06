@@ -150,3 +150,11 @@ Version 0.26.1, not run in the game. The list row's `Refresh` now writes the val
 Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run42.log`. Row values show, and one press sets a free control, per the user. Pressing a control already in use left the row at NOT BOUND, and the user asked how to unbind.
 
 The cause was in `SyncTabBindings`. It applied changes as it went, so a control taken from a later row made that row look changed too, and it took the control back. Version 0.26.2 finds the changed rows first and then applies them. Delete now unbinds a hovered row.
+
+### Run of 0.26.2, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run43.log`. User report: Delete works, and it isn't clear to a player how to clear a setting. Binding Lights to RED ENTER worked, and the log shows it. Moving a control away from Horn, in both directions, isn't reported in full. Controls in the car, the restart and the main menu aren't reported.
+
+### Help text
+
+Version 0.26.3, not run in the game. Each section header now says how to set and clear a row. The game's hover help panel didn't show the rows' plain text descriptions, so the script writes them to `m_descriptionText` on hover.

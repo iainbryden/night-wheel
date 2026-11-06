@@ -148,6 +148,18 @@ protected cb func OnHoverOut(e: ref<inkPointerEvent>) -> Bool {
     return handled;
 }
 
+// The menu's help panel doesn't show plain text, so a WHEEL tab row's help is set here.
+@wrapMethod(SettingsMainGameController)
+protected cb func OnSettingHoverOver(evt: ref<inkPointerEvent>) -> Bool {
+    let handled = wrappedMethod(evt);
+    let row = evt.GetCurrentTarget().GetController() as SettingsSelectorController;
+    if IsDefined(row) && IsDefined(row.m_SettingsEntry) && StrBeginsWith(NameToString(row.m_SettingsEntry.GetGroupPath()), "/wheel/") {
+        inkTextRef.SetText(this.m_descriptionText, NameToString(row.m_SettingsEntry.GetDescription()));
+        inkTextRef.SetVisible(this.m_descriptionText, true);
+    }
+    return handled;
+}
+
 // Leaving the game's Settings menu is when a change made in the WHEEL tab should reach the mod.
 @wrapMethod(SettingsMainGameController)
 protected cb func OnUninitialize() -> Bool {
