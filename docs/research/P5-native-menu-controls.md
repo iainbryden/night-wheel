@@ -27,3 +27,19 @@ Whether spawned widgets draw correctly on the page at `inkMenuLayer`, and whethe
 ## Steering sliders
 
 Version 0.22.0, user report: "works well." The saved values are range 360, center response 1.0 and speed x2. The slider buttons work and saved each change, per the log. Which G HUB values were in use isn't confirmed yet, and the defaults stay neutral until it is.
+
+## WolvenKit read, 2026-11-06
+
+Approved by the user. WolvenKit.Console 9.1.0 came from the project's GitHub releases, and its SHA-256 `7caf49cdf0f478b484b1a5a27e5aef261b879fabea7e72e33ca60eff3b834f4f` matches the digest GitHub publishes. It is GPL-3.0 and isn't shipped with the mod. It's kept in `out/tools/`, outside Git and the game folder. It extracted one file from `basegame_1_engine.archive`, and it changed no game file. See DEP-016.
+
+`settings_main.inkwidget` holds 18 library items, including `settingsSelectorInt`, `settingsSelectorFloat`, `settingsSelectorBool`, `settingsSelectorIntList`, `settingsSelectorStringList`, `settingsSelectorKeyBinding`, `settingsSelectorButton` and `settingsCategory`. The slider row is 1800 by 80: `layout/labels/label` for the name, `layout/container` carrying an `inkSliderController`, `layout/container/slidingArea/knob/txtValue` for the value, and `layout/container/btnLeft` and `btnRight`. Its root carries `SettingsSelectorControllerInt`.
+
+## Test build
+
+Version 0.23.0, not run in the game. The three steering rows spawn `settingsSelectorInt` through the pause menu's controller and use its look and slider, with this script handling the arrows. If the row or any named part is missing, the page draws its own row instead, and the log says why. Only these rows are converted, so the two looks can be compared.
+
+Risks for the test:
+
+- The row's `Setup` is never called, so the row's own controller has no game setting behind it. If its handlers use that when hovered or clicked, they could misbehave, and in the worst case the game could crash. Keep a save first.
+- The slider's knob may not draw or move correctly with input turned off.
+- The row depends on a game file's internal names, which a patch could change. The fallback covers missing names, not changed behaviour.

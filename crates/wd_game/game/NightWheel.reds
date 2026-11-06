@@ -77,6 +77,7 @@ private func PopulateMenuItemList() -> Void {
     let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
     if IsDefined(service) {
         service.SetMenuRoot(this.GetRootWidget());
+        service.SetMenuController(this);
     }
 }
 
@@ -185,6 +186,9 @@ public class NightWheelService extends ScriptableService {
     private let m_boostFill: ref<inkRectangle>;
     private let m_sliderValues: array<ref<inkText>>;
     private let m_sliderFills: array<ref<inkRectangle>>;
+    private let m_sliderControls: array<ref<inkSliderController>>;
+    private let m_sliderShown: array<Float>;
+    private let m_menuController: wref<inkGameController>;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -804,6 +808,10 @@ public class NightWheelService extends ScriptableService {
         return IsDefined(this.m_screen);
     }
 
+    public func SetMenuController(controller: ref<inkGameController>) {
+        this.m_menuController = controller;
+    }
+
     public func SetMenuRoot(root: ref<inkWidget>) {
         this.m_menuRoot = root;
     }
@@ -938,20 +946,22 @@ public class NightWheelService extends ScriptableService {
             row += 1;
         }
 
-        // The steering section, at the bottom of the right column.
-        ArrayClear(this.m_sliderValues);
-        ArrayClear(this.m_sliderFills);
-        let sliderX = columnW + 80.0;
-        let sliderY = columnY[1] + 16.0;
-        let sliderBand = this.AddRect(content, sliderX, sliderY, columnW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
+        // The steering section, below both columns and as wide as the game's own settings rows.
+        this.ClearSliders();
+        let sliderW = 1800.0;
+        let sliderX = (2640.0 - sliderW) / 2.0;
+        let sliderY = MaxF(columnY[0], columnY[1]) + 16.0;
+        let sliderBand = this.AddRect(content, sliderX, sliderY, sliderW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
         sliderBand.SetOpacity(0.9);
-        this.AddRect(content, sliderX, sliderY, columnW, 3.0, this.Teal());
-        this.AddText(content, body, 38, sliderX + 20.0, sliderY, columnW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText("Steering");
+        this.AddRect(content, sliderX, sliderY, sliderW, 3.0, this.Teal());
+        this.AddText(content, body, 38, sliderX + 20.0, sliderY, sliderW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText("Steering");
         sliderY += 70.0;
         let slider = 0;
         while slider < NightWheel_SliderCount() {
-            this.AddSlider(content, body, slider, sliderX, sliderY);
-            sliderY += 72.0;
+            if !this.AddGameSlider(content, slider, sliderX, sliderY) {
+                this.AddSlider(content, body, slider, sliderX, sliderY);
+            }
+            sliderY += 88.0;
             slider += 1;
         }
         columnY[1] = sliderY;
@@ -966,6 +976,70 @@ public class NightWheelService extends ScriptableService {
         }
         this.UpdateScreen();
         NightWheel_Event("wheel-screen-open");
+    }
+
+    private func ClearSliders() {
+        ArrayClear(this.m_sliderValues);
+        ArrayClear(this.m_sliderFills);
+        ArrayClear(this.m_sliderControls);
+        ArrayClear(this.m_sliderShown);
+    }
+
+    // Uses the row from the game's own settings menu, so it looks the same. The row's controller
+    // expects a game setting, which these values aren't, so only its look and slider are used, and
+    // this script handles its arrows. False means the row couldn't be used, and the page draws its
+    // own instead, which also covers a game patch renaming anything here.
+    private func AddGameSlider(content: ref<inkCanvas>, index: Int32, x: Float, y: Float) -> Bool {
+        if !IsDefined(this.m_menuController) {
+            NightWheel_Event("game slider: no menu controller");
+            return false;
+        }
+        let row = this.m_menuController.SpawnFromExternal(content, r"base\\gameplay\\gui\\fullscreen\\settings\\settings_main.inkwidget", n"settingsSelectorInt") as inkCompoundWidget;
+        if !IsDefined(row) {
+            NightWheel_Event("game slider: row not found");
+            return false;
+        }
+        let label = row.GetWidget(n"layout/labels/label") as inkText;
+        let value = row.GetWidget(n"layout/container/slidingArea/knob/txtValue") as inkText;
+        let container = row.GetWidget(n"layout/container");
+        let left = row.GetWidget(n"layout/container/btnLeft");
+        let right = row.GetWidget(n"layout/container/btnRight");
+        let control: ref<inkSliderController>;
+        if IsDefined(container) {
+            control = container.GetController() as inkSliderController;
+        }
+        if !IsDefined(label) || !IsDefined(value) || !IsDefined(left) || !IsDefined(right) || !IsDefined(control) {
+            NightWheel_Event("game slider: row has changed");
+            content.RemoveChild(row);
+            return false;
+        }
+        row.SetAnchor(inkEAnchor.TopLeft);
+        row.SetMargin(new inkMargin(x, y, 0.0, 0.0));
+        row.SetSize(new Vector2(1800.0, 80.0));
+        let modified = row.GetWidget(n"modifiedFlag");
+        if IsDefined(modified) {
+            modified.SetVisible(false);
+        }
+        let hints = row.GetWidget(n"layout/container/inputHintsContainer");
+        if IsDefined(hints) {
+            hints.SetVisible(false);
+        }
+        label.SetText(NightWheel_SliderLabel(index));
+        let shown = NightWheel_SliderFraction(index);
+        control.Setup(0.0, 1.0, shown, 0.01);
+        control.SetInputDisabled(true);
+        let name = StringToName(IntToString(index));
+        left.SetName(name);
+        right.SetName(name);
+        left.RegisterToCallback(n"OnRelease", this, n"OnSliderDown");
+        right.RegisterToCallback(n"OnRelease", this, n"OnSliderUp");
+        let noFill: ref<inkRectangle>;
+        ArrayPush(this.m_sliderValues, value);
+        ArrayPush(this.m_sliderFills, noFill);
+        ArrayPush(this.m_sliderControls, control);
+        ArrayPush(this.m_sliderShown, shown);
+        NightWheel_Event(s"game slider: row \(index) added");
+        return true;
     }
 
     private func AddSlider(content: ref<inkCanvas>, body: String, index: Int32, x: Float, y: Float) {
@@ -991,7 +1065,10 @@ public class NightWheelService extends ScriptableService {
         track.SetOpacity(0.08);
         let fill = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Teal());
         fill.SetOpacity(0.45);
+        let noControl: ref<inkSliderController>;
         ArrayPush(this.m_sliderFills, fill);
+        ArrayPush(this.m_sliderControls, noControl);
+        ArrayPush(this.m_sliderShown, -1.0);
         ArrayPush(this.m_sliderValues, this.AddText(content, body, 34, trackX, y, trackW, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true));
     }
 
@@ -1047,8 +1124,7 @@ public class NightWheelService extends ScriptableService {
             this.m_boostFill = null;
             ArrayClear(this.m_rowValues);
             ArrayClear(this.m_rowMarks);
-            ArrayClear(this.m_sliderValues);
-            ArrayClear(this.m_sliderFills);
+            this.ClearSliders();
             if IsDefined(this.m_menuRoot) {
                 this.m_menuRoot.SetVisible(true);
             }
@@ -1090,7 +1166,15 @@ public class NightWheelService extends ScriptableService {
         let slider = 0;
         while slider < ArraySize(this.m_sliderValues) {
             this.m_sliderValues[slider].SetText(NightWheel_SliderValue(slider));
-            this.m_sliderFills[slider].SetSize(new Vector2(460.0 * NightWheel_SliderFraction(slider), 56.0));
+            let fraction = NightWheel_SliderFraction(slider);
+            if IsDefined(this.m_sliderFills[slider]) {
+                this.m_sliderFills[slider].SetSize(new Vector2(460.0 * fraction, 56.0));
+            }
+            // Only when it changes, because this runs on every refresh.
+            if IsDefined(this.m_sliderControls[slider]) && NotEquals(fraction, this.m_sliderShown[slider]) {
+                this.m_sliderControls[slider].ChangeProgress(fraction);
+                this.m_sliderShown[slider] = fraction;
+            }
             slider += 1;
         }
         let percent = NightWheel_BoostPercent();
