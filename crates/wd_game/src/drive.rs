@@ -232,6 +232,7 @@ mod tests {
             boost_percent: 25,
             steering_range: 900,
             steering_speed: None,
+            settings_tab_filled: false,
         }
     }
 

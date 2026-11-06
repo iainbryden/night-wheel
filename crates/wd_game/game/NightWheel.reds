@@ -40,10 +40,13 @@ native func NightWheel_SliderFraction(index: Int32) -> Float;
 native func NightWheel_SliderAdjust(index: Int32, steps: Int32);
 native func NightWheel_SliderNumber(index: Int32) -> Float;
 native func NightWheel_SliderSet(index: Int32, number: Float);
+native func NightWheel_TabFilled() -> Bool;
+native func NightWheel_MarkTabFilled();
 native func NightWheel_ScreenHints() -> String;
 
 // The WHEEL tab's labels are plain text, which the game's menu marks as not translated. This removes
-// that mark from any text under a widget, and leaves all other text alone.
+// that mark from any text under a widget, and leaves all other text alone. The menu puts the mark
+// back when it redraws a row, so this runs after each of those too.
 public func NightWheel_CleanLabels(widget: ref<inkWidget>) {
     let text = widget as inkText;
     if IsDefined(text) {
@@ -71,6 +74,49 @@ public func NightWheel_CleanLabels(widget: ref<inkWidget>) {
 public func Setup(entry: ref<ConfigVar>, isPreGame: Bool) -> Void {
     wrappedMethod(entry, isPreGame);
     NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsSelectorController)
+public func Refresh() -> Void {
+    wrappedMethod();
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsSelectorControllerInt)
+public func Refresh() -> Void {
+    wrappedMethod();
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsSelectorControllerFloat)
+public func Refresh() -> Void {
+    wrappedMethod();
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsSelectorController)
+protected cb func OnHoverOver(e: ref<inkPointerEvent>) -> Bool {
+    let handled = wrappedMethod(e);
+    NightWheel_CleanLabels(this.GetRootWidget());
+    return handled;
+}
+
+@wrapMethod(SettingsSelectorController)
+protected cb func OnHoverOut(e: ref<inkPointerEvent>) -> Bool {
+    let handled = wrappedMethod(e);
+    NightWheel_CleanLabels(this.GetRootWidget());
+    return handled;
+}
+
+// Leaving the game's Settings menu is when a change made in the WHEEL tab should reach the mod.
+@wrapMethod(SettingsMainGameController)
+protected cb func OnUninitialize() -> Bool {
+    let handled = wrappedMethod();
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
+    if IsDefined(service) {
+        service.SyncSettingsTab();
+    }
+    return handled;
 }
 
 @wrapMethod(SettingsCategoryController)
@@ -258,7 +304,7 @@ public class NightWheelService extends ScriptableService {
     private cb func OnSessionReady(event: ref<GameSessionEvent>) {
         NightWheel_Event("session-ready");
         this.ResetVehicleState("session start");
-        this.SyncSettingsTab(true);
+        this.SyncSettingsTab();
         if !this.m_active {
             this.m_active = true;
             this.ScheduleTick();
@@ -274,7 +320,7 @@ public class NightWheelService extends ScriptableService {
     private cb func OnSessionResume(event: ref<GameSessionEvent>) {
         this.m_paused = false;
         NightWheel_Event("session-resume");
-        this.SyncSettingsTab(false);
+        this.SyncSettingsTab();
         this.HideAll();
     }
 
@@ -289,10 +335,11 @@ public class NightWheelService extends ScriptableService {
         this.HideAll();
     }
 
-    // The WHEEL tab in the game's Settings menu holds these values as game settings. Starting a
-    // session copies the mod's saved values into the tab. After that, a change made in the tab is
-    // copied back when leaving the menu. Without the tab, as after a game patch restores the file,
-    // this does nothing and the mod's saved values still apply.
+    // The WHEEL tab in the game's Settings menu holds these values as game settings, and the game
+    // saves them. The tab gets one fill from the mod's saved values, the first time it's found. After
+    // that the tab decides, and its values are copied to the mod at session start and when leaving
+    // a menu. Without the tab, as after a game patch restores the file, this does nothing and the
+    // mod's saved values still apply.
     private func TabVar(index: Int32) -> ref<ConfigVar> {
         let names: array<CName>;
         ArrayPush(names, n"SteeringRange");
@@ -307,14 +354,12 @@ public class NightWheelService extends ScriptableService {
         return settings.GetVar(n"/wheel/driving", names[index]);
     }
 
-    private func SyncSettingsTab(seed: Bool) {
+    public func SyncSettingsTab() {
+        let seed = !NightWheel_TabFilled();
         let index = 0;
         while index < 4 {
             let setting = this.TabVar(index);
             if !IsDefined(setting) {
-                if seed {
-                    NightWheel_Event("settings tab: not found");
-                }
                 return;
             }
             let whole = setting as ConfigVarInt;
@@ -338,7 +383,8 @@ public class NightWheelService extends ScriptableService {
             index += 1;
         }
         if seed {
-            NightWheel_Event("settings tab: filled from saved values");
+            NightWheel_MarkTabFilled();
+            NightWheel_Event("settings tab: filled once from saved values");
         }
     }
 
@@ -406,7 +452,7 @@ public class NightWheelService extends ScriptableService {
             this.m_inMenu = inMenu;
             NightWheel_Event(s"in-menu: \(inMenu)");
             if !inMenu {
-                this.SyncSettingsTab(false);
+                this.SyncSettingsTab();
             }
         }
         let driving = !inMenu && IsDefined(player) && VehicleComponent.IsDriver(game, player);

@@ -34,7 +34,7 @@ static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
 const VERSION_MINOR: u16 = 25;
-const VERSION_PATCH: u32 = 1;
+const VERSION_PATCH: u32 = 2;
 
 struct NightWheel;
 
@@ -82,6 +82,8 @@ impl Plugin for NightWheel {
             GlobalExport(global!(c"NightWheel_SliderAdjust", slider_adjust)),
             GlobalExport(global!(c"NightWheel_SliderNumber", slider_number)),
             GlobalExport(global!(c"NightWheel_SliderSet", slider_set)),
+            GlobalExport(global!(c"NightWheel_TabFilled", tab_filled)),
+            GlobalExport(global!(c"NightWheel_MarkTabFilled", mark_tab_filled)),
             GlobalExport(global!(c"NightWheel_ScreenHints", screen_hints)),
         ]
     }
@@ -387,6 +389,22 @@ fn slider_set(index: i32, number: f32) {
     if let Some(config) = settings.as_mut()
         && settings::slider_set(index, f64::from(number), config)
     {
+        steering_changed(config);
+    }
+}
+
+fn tab_filled() -> bool {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .is_some_and(|config| config.settings_tab_filled)
+}
+
+fn mark_tab_filled() {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(config) = settings.as_mut() {
+        config.settings_tab_filled = true;
         steering_changed(config);
     }
 }

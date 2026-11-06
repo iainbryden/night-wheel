@@ -102,3 +102,18 @@ Approved by the user; checksums verified. Log kept as `out/game-before/night-whe
 ### Label cleanup
 
 Version 0.25.1, not run in the game. After the menu builds its tab, section headers and rows, a small function removes that prefix from any text under them. Descriptions show on hover, and this doesn't cover them yet. If a menu fills a label later than these hooks run, the prefix would remain. A proper translation entry would avoid this but needs a further framework or game file.
+
+### Run of 0.25.1, 2026-11-06
+
+Approved by the user; checksums verified. User report: mouse drag, A and D, and Restore Defaults work, and F1 opens the restore prompt. Two defects:
+
+- **A changed setting was lost.** The log shows no change reaching the mod, and each load filled the tab from the mod's saved values. That was this project's bug: session start wrote the old value over the game's, and the copy back only ran on leaving a menu during play. The tab showed 390 and boost 25 in the screenshot, and after the reload `UserSettings.json` held 360 and 200.
+- **The mark returns.** The cleanup removed most marks, but a row shows it again when hovered or changed.
+
+### The tab decides
+
+Version 0.25.2, not run in the game. The tab now gets one fill from the mod's values, remembered as `settings.tab_filled` in the profile. After that the game's saved value decides, and is copied to the mod at session start, on resume, on leaving a menu and when the Settings menu closes. The cleanup also runs after `Refresh`, and on hovering over and out. Changing a value may redraw a row in a way these don't cover.
+
+## Translations
+
+The mark doesn't mean translations are required. It's only how the menu flags text that has no translation entry. English labels in every language would be acceptable for a first release, and the page is already English only. Real translations would need the labels added to the game's text data, which needs a further framework or an edited game archive. That choice is open.

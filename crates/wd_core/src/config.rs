@@ -53,6 +53,9 @@ pub struct Config {
     pub steering_range: u32,
     /// The steering speed multiplier, once one has been chosen.
     pub steering_speed: Option<f64>,
+    /// Whether the game's Settings tab has had its one fill from these values. After that, the tab
+    /// holds the player's choices.
+    pub settings_tab_filled: bool,
 }
 
 /// Boost strength when none has been chosen.
@@ -160,6 +163,7 @@ impl Config {
             boost_percent: DEFAULT_BOOST_PERCENT,
             steering_range: DEFAULT_STEERING_RANGE,
             steering_speed: None,
+            settings_tab_filled: false,
         };
         if let Some(previous) = previous {
             config.steering.deadzone = previous.steering.deadzone;
@@ -179,6 +183,7 @@ impl Config {
             config.boost_percent = previous.boost_percent;
             config.steering_range = previous.steering_range;
             config.steering_speed = previous.steering_speed;
+            config.settings_tab_filled = previous.settings_tab_filled;
         }
         config
     }
@@ -277,6 +282,7 @@ impl Config {
             boost_percent: DEFAULT_BOOST_PERCENT,
             steering_range: GHUB_NEUTRAL_RANGE,
             steering_speed: None,
+            settings_tab_filled: false,
         };
         // Files saved before boost existed have no strength, and that is not an error.
         if fields.values.contains_key("boost.percent") {
@@ -288,6 +294,9 @@ impl Config {
         }
         if fields.values.contains_key("steering.speed") {
             config.steering_speed = Some(fields.take("steering.speed")?);
+        }
+        if fields.values.contains_key("settings.tab_filled") {
+            config.settings_tab_filled = fields.take("settings.tab_filled")?;
         }
         for (key, value) in fields.values {
             if key
@@ -354,6 +363,9 @@ impl Config {
         text.push_str(&format!("steering.range = {}\n", self.steering_range));
         if let Some(speed) = self.steering_speed {
             text.push_str(&format!("steering.speed = {speed}\n"));
+        }
+        if self.settings_tab_filled {
+            text.push_str("settings.tab_filled = true\n");
         }
         for (action, control) in self.bindings.iter() {
             text.push_str(&format!("{BINDING_PREFIX}{} = {control}\n", action.key()));
@@ -572,6 +584,22 @@ mod tests {
     }
 
     #[test]
+    fn the_tab_fill_is_remembered_and_older_files_have_not_had_it() {
+        let mut config = sample();
+        assert!(
+            !Config::parse(&config.to_text())
+                .unwrap()
+                .settings_tab_filled
+        );
+        config.settings_tab_filled = true;
+        assert!(
+            Config::parse(&config.to_text())
+                .unwrap()
+                .settings_tab_filled
+        );
+    }
+
+    #[test]
     fn steering_choices_outside_their_limits_are_refused() {
         let mut config = sample();
         config.steering_range = 90;
@@ -714,6 +742,7 @@ mod tests {
             boost_percent: DEFAULT_BOOST_PERCENT,
             steering_range: GHUB_NEUTRAL_RANGE,
             steering_speed: None,
+            settings_tab_filled: false,
             steering: SteeringCalibration {
                 left: -100,
                 center: 3,
