@@ -6,8 +6,23 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# Keeps this computer's folder names out of the released files. Cargo's encoded form is used because
+# these paths can contain spaces.
+$cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME '.cargo' }
+$rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $HOME '.rustup' }
+$env:CARGO_ENCODED_RUSTFLAGS = @(
+    "--remap-path-prefix=$cargoHome=cargo",
+    "--remap-path-prefix=$rustupHome=rustup",
+    "--remap-path-prefix=$root=src",
+    '-Clink-arg=/PDBALTPATH:%_PDB%'
+) -join [char]0x1f
+# The game SDK is C++ and keeps its header paths in its asserts, so its compiler needs this too.
+$env:CXXFLAGS = "/d1trimfile:$cargoHome"
+cargo clean --release -p red4ext-rs
 cargo build --locked --release -p wd_game -p wd_setup
-if ($LASTEXITCODE -ne 0) { throw 'The build failed.' }
+$built = $LASTEXITCODE
+Remove-Item Env:CARGO_ENCODED_RUSTFLAGS, Env:CXXFLAGS
+if ($built -ne 0) { throw 'The build failed.' }
 
 $manifest = Get-Content (Join-Path $root 'Cargo.toml') -Raw
 if ($manifest -notmatch '(?m)^version = "([^"]+)"') { throw 'No version in Cargo.toml.' }
