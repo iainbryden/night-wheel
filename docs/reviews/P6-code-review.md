@@ -60,7 +60,7 @@ User report on 0.21.3: the remaining tests were run.
 ## Run of 0.21.4, 2026-11-06
 
 - **Wheel unplugged:** the game showed its own controller disconnected warning and paused, which the user accepts. The log shows the disconnect, and the wheel connecting again 8 seconds later. Both came through Windows' notices, and the once-a-second check had nothing to correct.
-- **Top switch:** whether it was tried in this run isn't recorded, and no separate event shows it. The fix in 0.21.4 is still unproven for that case.
+- **Top switch:** the user reports flipping it had no visible effect this time. Logitech documents it as the PS3/PS4 platform selector, not a power switch. The log shows no event for it, so the fix in 0.21.4 isn't shown to be the reason.
 
 ## To test in the game
 
