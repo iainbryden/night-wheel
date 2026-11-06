@@ -49,12 +49,24 @@ pub struct Config {
     pub bindings: Bindings,
     /// How far boost may raise the car's speed, as a percentage.
     pub boost_percent: u32,
+    /// How many degrees of wheel turn reach full lock, side to side.
+    pub steering_range: u32,
+    /// The steering speed multiplier, once one has been chosen.
+    pub steering_speed: Option<f64>,
 }
 
 /// Boost strength when none has been chosen.
 pub const DEFAULT_BOOST_PERCENT: u32 = 25;
 /// The strengths a player may choose.
 pub const BOOST_PERCENT_RANGE: std::ops::RangeInclusive<u32> = 25..=200;
+
+/// The full travel of the wheel with G HUB at its widest operating range. The steering range is
+/// measured against this, because the mod can't read G HUB's setting.
+pub const GHUB_NEUTRAL_RANGE: u32 = 900;
+/// The steering ranges a player may choose, in degrees.
+pub const STEERING_RANGE: std::ops::RangeInclusive<u32> = 180..=GHUB_NEUTRAL_RANGE;
+/// The steering speed multipliers a player may choose.
+pub const STEERING_SPEED_RANGE: std::ops::RangeInclusive<f64> = 1.0..=10.0;
 
 /// Why a configuration could not be parsed or accepted.
 #[derive(Debug, Clone, PartialEq)]
@@ -143,6 +155,8 @@ impl Config {
             brake: calibrated.brake,
             bindings: Bindings::default(),
             boost_percent: DEFAULT_BOOST_PERCENT,
+            steering_range: GHUB_NEUTRAL_RANGE,
+            steering_speed: None,
         };
         if let Some(previous) = previous {
             config.steering.deadzone = previous.steering.deadzone;
@@ -160,6 +174,8 @@ impl Config {
             }
             config.bindings = previous.bindings.clone();
             config.boost_percent = previous.boost_percent;
+            config.steering_range = previous.steering_range;
+            config.steering_speed = previous.steering_speed;
         }
         config
     }
@@ -178,6 +194,15 @@ impl Config {
         self.brake.validate()?;
         if !BOOST_PERCENT_RANGE.contains(&self.boost_percent) {
             return Err(ConfigError::BadValue("boost.percent"));
+        }
+        if !STEERING_RANGE.contains(&self.steering_range) {
+            return Err(ConfigError::BadValue("steering.range"));
+        }
+        if self
+            .steering_speed
+            .is_some_and(|speed| !STEERING_SPEED_RANGE.contains(&speed))
+        {
+            return Err(ConfigError::BadValue("steering.speed"));
         }
         Ok(())
     }
@@ -247,10 +272,19 @@ impl Config {
             ])?,
             bindings: Bindings::default(),
             boost_percent: DEFAULT_BOOST_PERCENT,
+            steering_range: GHUB_NEUTRAL_RANGE,
+            steering_speed: None,
         };
         // Files saved before boost existed have no strength, and that is not an error.
         if fields.values.contains_key("boost.percent") {
             config.boost_percent = fields.take("boost.percent")?;
+        }
+        // Older files have no steering range or speed, and that is not an error.
+        if fields.values.contains_key("steering.range") {
+            config.steering_range = fields.take("steering.range")?;
+        }
+        if fields.values.contains_key("steering.speed") {
+            config.steering_speed = Some(fields.take("steering.speed")?);
         }
         for (key, value) in fields.values {
             if key
@@ -314,6 +348,10 @@ impl Config {
             ));
         }
         text.push_str(&format!("boost.percent = {}\n", self.boost_percent));
+        text.push_str(&format!("steering.range = {}\n", self.steering_range));
+        if let Some(speed) = self.steering_speed {
+            text.push_str(&format!("steering.speed = {speed}\n"));
+        }
         for (action, control) in self.bindings.iter() {
             text.push_str(&format!("{BINDING_PREFIX}{} = {control}\n", action.key()));
         }
@@ -510,6 +548,37 @@ mod tests {
     }
 
     #[test]
+    fn steering_choices_survive_saving_and_older_files_get_neutral_values() {
+        let mut config = sample();
+        config.steering_range = 270;
+        config.steering_speed = Some(4.0);
+        let parsed = Config::parse(&config.to_text()).unwrap();
+        assert_eq!(parsed.steering_range, 270);
+        assert_eq!(parsed.steering_speed, Some(4.0));
+        let older: String = config
+            .to_text()
+            .lines()
+            .filter(|line| {
+                !line.starts_with("steering.range") && !line.starts_with("steering.speed")
+            })
+            .map(|line| format!("{line}\n"))
+            .collect();
+        let parsed = Config::parse(&older).unwrap();
+        assert_eq!(parsed.steering_range, GHUB_NEUTRAL_RANGE);
+        assert_eq!(parsed.steering_speed, None);
+    }
+
+    #[test]
+    fn steering_choices_outside_their_limits_are_refused() {
+        let mut config = sample();
+        config.steering_range = 90;
+        assert!(config.validate().is_err());
+        config = sample();
+        config.steering_speed = Some(11.0);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
     fn a_retired_binding_is_ignored_and_dropped_on_saving() {
         let older = format!("{}binding.hover = button:0009:0008\n", sample().to_text());
         let parsed = Config::parse(&older).unwrap();
@@ -640,6 +709,8 @@ mod tests {
             },
             bindings: Bindings::default(),
             boost_percent: DEFAULT_BOOST_PERCENT,
+            steering_range: GHUB_NEUTRAL_RANGE,
+            steering_speed: None,
             steering: SteeringCalibration {
                 left: -100,
                 center: 3,

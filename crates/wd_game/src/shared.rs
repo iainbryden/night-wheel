@@ -62,6 +62,10 @@ static AUTOPILOT: AtomicBool = AtomicBool::new(false);
 static FIRED: AtomicU32 = AtomicU32::new(0);
 /// The control bit bound to each settings row, or zero.
 static ROW_BITS: [AtomicU64; ROWS.len()] = [const { AtomicU64::new(0) }; ROWS.len()];
+/// The steering range and curve, as float bits, so the settings page can change them without a lock
+/// on the wheel path.
+static RANGE_SCALE: AtomicU64 = AtomicU64::new(1.0f64.to_bits());
+static EXPONENT: AtomicU64 = AtomicU64::new(1.0f64.to_bits());
 /// The steering speed multiplier for this launch, set once before the game asks for it.
 static STEERING_SPEED: OnceLock<f32> = OnceLock::new();
 
@@ -314,6 +318,18 @@ pub fn controls_held() -> u64 {
 
 pub fn now_ms() -> u64 {
     micros_since_start(Instant::now()) / 1000
+}
+
+pub fn set_tuning(tuning: drive::Tuning) {
+    RANGE_SCALE.store(tuning.range_scale.to_bits(), Ordering::Relaxed);
+    EXPONENT.store(tuning.exponent.to_bits(), Ordering::Relaxed);
+}
+
+pub fn tuning() -> drive::Tuning {
+    drive::Tuning {
+        range_scale: f64::from_bits(RANGE_SCALE.load(Ordering::Relaxed)),
+        exponent: f64::from_bits(EXPONENT.load(Ordering::Relaxed)),
+    }
 }
 
 pub fn set_steering_speed(value: f32) {

@@ -88,7 +88,10 @@ unsafe extern "C" fn get_state_detour(
         && !shared::autopilot()
         && let Some(config) = shared::PROFILE.get()
     {
-        output = drive::merge(pad, drive::output(config, shared::raw_axes()));
+        output = drive::merge(
+            pad,
+            drive::output(config, shared::raw_axes(), shared::tuning()),
+        );
         shared::record_applied(output.thumb_x);
     }
     shared::set_brake_clear(output.left_trigger < BOOST_BRAKE_LIMIT);

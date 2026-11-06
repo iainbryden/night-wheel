@@ -58,13 +58,38 @@ fn to_trigger(intent: f64) -> u8 {
     (intent.clamp(0.0, 1.0) * f64::from(u8::MAX)).round() as u8
 }
 
+/// The steering choices that can change while the game runs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tuning {
+    pub range_scale: f64,
+    pub exponent: f64,
+}
+
+impl Tuning {
+    pub fn of(config: &Config) -> Self {
+        Self {
+            range_scale: f64::from(wd_core::config::GHUB_NEUTRAL_RANGE)
+                / f64::from(config.steering_range),
+            exponent: config.steering.exponent,
+        }
+    }
+}
+
 /// Gamepad values for raw steering, throttle and brake readings. The wheel reports nothing until
 /// something moves, so a control with no reading yet is neutral: a raw default could otherwise
 /// read as a fully pressed pedal.
-pub fn output(config: &Config, [steering, throttle, brake]: [Option<i32>; 3]) -> Output {
+pub fn output(
+    config: &Config,
+    [steering, throttle, brake]: [Option<i32>; 3],
+    tuning: Tuning,
+) -> Output {
     Output {
         thumb_x: steering.map_or(0, |raw| {
-            to_thumb(compensate(config.steering.normalize(raw)))
+            to_thumb(compensate(config.steering.respond(
+                raw,
+                tuning.range_scale,
+                tuning.exponent,
+            )))
         }),
         right_trigger: throttle.map_or(0, |raw| to_trigger(config.throttle.normalize(raw))),
         left_trigger: brake.map_or(0, |raw| to_trigger(config.brake.normalize(raw))),
@@ -204,7 +229,45 @@ mod tests {
             brake: pedal,
             bindings: Bindings::default(),
             boost_percent: 25,
+            steering_range: 900,
+            steering_speed: None,
         }
+    }
+
+    fn neutral() -> Tuning {
+        Tuning {
+            range_scale: 1.0,
+            exponent: 1.0,
+        }
+    }
+
+    #[test]
+    fn a_saved_range_and_curve_become_the_tuning() {
+        let mut config = config();
+        assert_eq!(Tuning::of(&config), neutral());
+        config.steering_range = 225;
+        config.steering.exponent = 2.0;
+        assert_eq!(
+            Tuning::of(&config),
+            Tuning {
+                range_scale: 4.0,
+                exponent: 2.0
+            }
+        );
+    }
+
+    #[test]
+    fn the_tuning_changes_the_stick() {
+        let wide = output(&config(), [Some(125), None, None], neutral()).thumb_x;
+        let narrow = Tuning {
+            range_scale: 4.0,
+            exponent: 1.0,
+        };
+        assert!(wide < i16::MAX);
+        assert_eq!(
+            output(&config(), [Some(125), None, None], narrow).thumb_x,
+            i16::MAX
+        );
     }
 
     fn wheel_button(usage: u16) -> Control {
@@ -295,12 +358,15 @@ mod tests {
 
     #[test]
     fn controls_with_no_reading_are_neutral() {
-        assert_eq!(output(&config(), [None, None, None]), Output::default());
+        assert_eq!(
+            output(&config(), [None, None, None], neutral()),
+            Output::default()
+        );
     }
 
     #[test]
     fn a_pressed_reading_gives_full_output() {
-        let result = output(&config(), [Some(200), Some(0), Some(255)]);
+        let result = output(&config(), [Some(200), Some(0), Some(255)], neutral());
         assert_eq!(result.thumb_x, i16::MAX);
         assert_eq!(result.right_trigger, u8::MAX);
         assert_eq!(result.left_trigger, 0);

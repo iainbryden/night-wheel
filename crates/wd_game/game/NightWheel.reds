@@ -33,6 +33,11 @@ native func NightWheel_Throttle() -> Float;
 native func NightWheel_Brake() -> Float;
 native func NightWheel_SetAutopilot(on: Bool);
 native func NightWheel_ScreenStatus() -> String;
+native func NightWheel_SliderCount() -> Int32;
+native func NightWheel_SliderLabel(index: Int32) -> String;
+native func NightWheel_SliderValue(index: Int32) -> String;
+native func NightWheel_SliderFraction(index: Int32) -> Float;
+native func NightWheel_SliderAdjust(index: Int32, steps: Int32);
 native func NightWheel_ScreenHints() -> String;
 
 public class NightWheelSteeringRates extends ScriptableTweak {
@@ -178,6 +183,8 @@ public class NightWheelService extends ScriptableService {
     private let m_lastBoostTime: Float;
     private let m_boostValue: ref<inkText>;
     private let m_boostFill: ref<inkRectangle>;
+    private let m_sliderValues: array<ref<inkText>>;
+    private let m_sliderFills: array<ref<inkRectangle>>;
 
     public static func EntryLabel() -> String {
         return "WHEEL SETTINGS";
@@ -931,6 +938,24 @@ public class NightWheelService extends ScriptableService {
             row += 1;
         }
 
+        // The steering section, at the bottom of the right column.
+        ArrayClear(this.m_sliderValues);
+        ArrayClear(this.m_sliderFills);
+        let sliderX = columnW + 80.0;
+        let sliderY = columnY[1] + 16.0;
+        let sliderBand = this.AddRect(content, sliderX, sliderY, columnW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
+        sliderBand.SetOpacity(0.9);
+        this.AddRect(content, sliderX, sliderY, columnW, 3.0, this.Teal());
+        this.AddText(content, body, 38, sliderX + 20.0, sliderY, columnW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText("Steering");
+        sliderY += 70.0;
+        let slider = 0;
+        while slider < NightWheel_SliderCount() {
+            this.AddSlider(content, body, slider, sliderX, sliderY);
+            sliderY += 72.0;
+            slider += 1;
+        }
+        columnY[1] = sliderY;
+
         let bottom = MaxF(columnY[0], columnY[1]);
         this.m_status = this.AddText(content, heading, 30, 0.0, bottom + 8.0, 2640.0, 50.0, this.Teal(), true);
         this.m_hints = this.AddText(content, heading, 26, 0.0, bottom + 62.0, 2640.0, 44.0, this.Red(), true);
@@ -941,6 +966,45 @@ public class NightWheelService extends ScriptableService {
         }
         this.UpdateScreen();
         NightWheel_Event("wheel-screen-open");
+    }
+
+    private func AddSlider(content: ref<inkCanvas>, body: String, index: Int32, x: Float, y: Float) {
+        let boxX = x + 640.0;
+        let boxW = 620.0;
+        let name = StringToName(IntToString(index));
+        this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(NightWheel_SliderLabel(index));
+        let down = this.AddRect(content, boxX, y + 6.0, 70.0, 56.0, this.Red());
+        down.SetOpacity(0.35);
+        down.SetName(name);
+        down.SetInteractive(true);
+        down.RegisterToCallback(n"OnRelease", this, n"OnSliderDown");
+        this.AddText(content, body, 40, boxX, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("-");
+        let up = this.AddRect(content, boxX + boxW - 70.0, y + 6.0, 70.0, 56.0, this.Red());
+        up.SetOpacity(0.35);
+        up.SetName(name);
+        up.SetInteractive(true);
+        up.RegisterToCallback(n"OnRelease", this, n"OnSliderUp");
+        this.AddText(content, body, 40, boxX + boxW - 70.0, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("+");
+        let trackX = boxX + 80.0;
+        let trackW = boxW - 160.0;
+        let track = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Red());
+        track.SetOpacity(0.08);
+        let fill = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Teal());
+        fill.SetOpacity(0.45);
+        ArrayPush(this.m_sliderFills, fill);
+        ArrayPush(this.m_sliderValues, this.AddText(content, body, 34, trackX, y, trackW, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true));
+    }
+
+    protected cb func OnSliderDown(event: ref<inkPointerEvent>) -> Bool {
+        if event.IsAction(n"click") {
+            NightWheel_SliderAdjust(StringToInt(NameToString(event.GetCurrentTarget().GetName())), -1);
+        }
+    }
+
+    protected cb func OnSliderUp(event: ref<inkPointerEvent>) -> Bool {
+        if event.IsAction(n"click") {
+            NightWheel_SliderAdjust(StringToInt(NameToString(event.GetCurrentTarget().GetName())), 1);
+        }
     }
 
     protected cb func OnBoostDown(event: ref<inkPointerEvent>) -> Bool {
@@ -983,6 +1047,8 @@ public class NightWheelService extends ScriptableService {
             this.m_boostFill = null;
             ArrayClear(this.m_rowValues);
             ArrayClear(this.m_rowMarks);
+            ArrayClear(this.m_sliderValues);
+            ArrayClear(this.m_sliderFills);
             if IsDefined(this.m_menuRoot) {
                 this.m_menuRoot.SetVisible(true);
             }
@@ -1020,6 +1086,12 @@ public class NightWheelService extends ScriptableService {
                 this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
             }
             row += 1;
+        }
+        let slider = 0;
+        while slider < ArraySize(this.m_sliderValues) {
+            this.m_sliderValues[slider].SetText(NightWheel_SliderValue(slider));
+            this.m_sliderFills[slider].SetSize(new Vector2(460.0 * NightWheel_SliderFraction(slider), 56.0));
+            slider += 1;
         }
         let percent = NightWheel_BoostPercent();
         this.m_boostValue.SetText(s"\(percent)%");

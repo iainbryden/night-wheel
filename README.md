@@ -6,6 +6,7 @@ A Logitech G29 driving mod for Cyberpunk 2077 on Windows, written independently 
 
 - Steers and drives with the G29, using calibrated steering and pedals.
 - Has a **WHEEL SETTINGS** page in the pause menu, where you bind wheel controls to functions with one press.
+- Sets steering range, center response and steering speed on that page.
 - Controls vehicle functions, the camera and the radio from the wheel.
 - Adds boost, with an adjustable strength. A burst lasts up to 5 seconds, then has a 3 second cooldown, and each burst takes a fresh press.
 - Adds flight: **Climb** lifts the car and keeps rising while held. **Descend** lowers it, and holding it at the ground for half a second ends flight. The car pauses briefly on landing, then regains its speed. Flight doesn't check for buildings ahead, so the car can pass through them.
@@ -23,7 +24,7 @@ Tested on patch 2.5 (Steam) with these versions, which you install separately:
 | [Codeware](https://github.com/psiberx/cp2077-codeware) | 1.21.2 |
 | [TweakXL](https://github.com/psiberx/cp2077-tweak-xl) | 1.12.0 |
 
-Logitech G HUB must be running. These G HUB settings work on the test PC: operating range 210, sensitivity 4, and the centering spring for non force feedback games off.
+Logitech G HUB must be running. The aim is to leave G HUB at sensitivity 50 and operating range 900 and set the feel on the WHEEL SETTINGS page, but the page defaults aren't tuned yet. Until they are, these G HUB settings work on the test PC: operating range 210, sensitivity 4, and the centering spring for non force feedback games off.
 
 ## Install
 
@@ -45,11 +46,10 @@ Settings and logs stay on your PC in `%LOCALAPPDATA%\NightWheel`. Nothing is upl
 
 | File | Contents |
 |---|---|
-| `profile.cfg`, `profile.cfg.bak` | Calibration, bindings and boost strength, with a backup |
-| `steering-speed.txt` | Optional steering speed multiplier from 1 to 10. It applies at the next game start, and the default is 10 |
+| `profile.cfg`, `profile.cfg.bak` | Calibration, bindings, boost strength and steering choices, with a backup |
 | `night-wheel.log`, `night-wheel.old.log` | This launch's log and the last one. Each stops growing at 20 MB |
 
-Settings from test builds in `%LOCALAPPDATA%\WheelDrive` are copied once, if the new folder has none. The old folder isn't changed.
+Settings from test builds in `%LOCALAPPDATA%\WheelDrive` are copied once, if the new folder has none. The old folder isn't changed. An older `steering-speed.txt` is adopted once, and the slider replaces it.
 
 ## Build from source
 

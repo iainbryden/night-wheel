@@ -33,8 +33,8 @@ static SETTINGS: Mutex<Option<Config>> = Mutex::new(None);
 static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
-const VERSION_MINOR: u16 = 21;
-const VERSION_PATCH: u32 = 5;
+const VERSION_MINOR: u16 = 22;
+const VERSION_PATCH: u32 = 0;
 
 struct NightWheel;
 
@@ -75,6 +75,11 @@ impl Plugin for NightWheel {
             GlobalExport(global!(c"NightWheel_Brake", brake)),
             GlobalExport(global!(c"NightWheel_SetAutopilot", set_autopilot)),
             GlobalExport(global!(c"NightWheel_ScreenStatus", screen_status)),
+            GlobalExport(global!(c"NightWheel_SliderCount", slider_count)),
+            GlobalExport(global!(c"NightWheel_SliderLabel", slider_label)),
+            GlobalExport(global!(c"NightWheel_SliderValue", slider_value)),
+            GlobalExport(global!(c"NightWheel_SliderFraction", slider_fraction)),
+            GlobalExport(global!(c"NightWheel_SliderAdjust", slider_adjust)),
             GlobalExport(global!(c"NightWheel_ScreenHints", screen_hints)),
         ]
     }
@@ -148,6 +153,7 @@ fn load_profile() {
                 loaded.config.axes.steering, loaded.config.axes.throttle, loaded.config.axes.brake
             ));
             shared::set_row_bits(&loaded.config.bindings);
+            shared::set_tuning(drive::Tuning::of(&loaded.config));
             *SETTINGS.lock().unwrap_or_else(PoisonError::into_inner) = Some(loaded.config.clone());
             let _ = shared::PROFILE.set(loaded.config);
         }
@@ -159,18 +165,27 @@ fn load_profile() {
     }
 }
 
-/// Read before the game asks for it. A missing or unusable file keeps the proven default.
+/// Read before the game asks for it. A choice in the settings wins. Otherwise a text file from an
+/// earlier version is adopted, so the next save keeps it, and otherwise the proven default applies.
 fn load_steering_speed() {
-    let path = config::settings_folder().map(|folder| folder.join("steering-speed.txt"));
-    let text = path.and_then(|path| std::fs::read_to_string(path).ok());
-    let chosen = text.as_deref().and_then(drive::parse_steering_speed);
-    let value = chosen.unwrap_or(drive::DEFAULT_STEERING_SPEED);
-    shared::set_steering_speed(value);
-    let source = match (&text, chosen) {
-        (_, Some(_)) => "from file",
-        (Some(_), None) => "file not usable, so the default",
-        (None, None) => "no file, so the default",
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let saved = settings.as_ref().and_then(|config| config.steering_speed);
+    let (value, source) = if let Some(saved) = saved {
+        (saved as f32, "from settings")
+    } else {
+        let path = config::settings_folder().map(|folder| folder.join("steering-speed.txt"));
+        let text = path.and_then(|path| std::fs::read_to_string(path).ok());
+        match text.as_deref().and_then(drive::parse_steering_speed) {
+            Some(chosen) => {
+                if let Some(config) = settings.as_mut() {
+                    config.steering_speed = Some(f64::from(chosen));
+                }
+                (chosen, "from the old text file")
+            }
+            None => (drive::DEFAULT_STEERING_SPEED, "the default"),
+        }
     };
+    shared::set_steering_speed(value);
     log_file::send(format!("steering speed x{value}, {source}"));
 }
 
@@ -316,6 +331,54 @@ fn boost_adjust(steps: i32) {
     match saved {
         Ok(()) => log_file::send(format!("boost strength saved: {moved}%")),
         Err(problem) => log_file::send(format!("boost strength not saved: {problem}")),
+    }
+}
+
+fn slider_count() -> i32 {
+    settings::SLIDER_COUNT
+}
+
+fn slider_label(index: i32) -> String {
+    settings::slider_label(index).to_owned()
+}
+
+fn slider_value(index: i32) -> String {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map_or_else(String::new, |config| settings::slider_value(index, config))
+}
+
+fn slider_fraction(index: i32) -> f32 {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map_or(0.0, |config| {
+            settings::slider_fraction(index, config) as f32
+        })
+}
+
+/// Moves a steering slider, applies range and curve at once, and saves.
+fn slider_adjust(index: i32, steps: i32) {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let Some(config) = settings.as_mut() else {
+        return;
+    };
+    if !settings::slider_adjust(index, steps, config) {
+        return;
+    }
+    shared::set_tuning(drive::Tuning::of(config));
+    let saved = config::profile_path()
+        .ok_or_else(|| "no settings folder".to_owned())
+        .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
+    match saved {
+        Ok(()) => log_file::send(format!(
+            "steering saved: range {} curve {} speed {:?}",
+            config.steering_range, config.steering.exponent, config.steering_speed
+        )),
+        Err(problem) => log_file::send(format!("steering not saved: {problem}")),
     }
 }
 

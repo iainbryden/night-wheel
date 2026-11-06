@@ -100,6 +100,12 @@ impl SteeringCalibration {
     ///
     /// The calibration must have passed [`Self::validate`].
     pub fn normalize(&self, raw: i32) -> f64 {
+        self.respond(raw, 1.0, self.exponent)
+    }
+
+    /// Like [`Self::normalize`], with a range and curve chosen in the game. Full lock arrives at
+    /// `1 / range_scale` of the wheel's travel, and the curve then shapes that whole span.
+    pub fn respond(&self, raw: i32, range_scale: f64, exponent: f64) -> f64 {
         let rising = self.right > self.left;
         let toward_right = if rising {
             raw >= self.center
@@ -111,11 +117,11 @@ impl SteeringCalibration {
         } else {
             (self.left, -1.0)
         };
-        let moved = travel(raw, self.center, end);
+        let moved = (travel(raw, self.center, end) * range_scale).min(1.0);
         let shaped = if moved <= self.deadzone {
             0.0
         } else {
-            ((moved - self.deadzone) / (1.0 - self.deadzone)).powf(self.exponent)
+            ((moved - self.deadzone) / (1.0 - self.deadzone)).powf(exponent)
         };
         let direction = if self.inverted { -side } else { side };
         (shaped * self.sensitivity * direction).clamp(-1.0, 1.0)
@@ -283,6 +289,24 @@ mod tests {
         close(s.normalize(200), 0.25);
         close(s.normalize(50), -0.25);
         close(s.normalize(300), 1.0);
+    }
+
+    #[test]
+    fn a_narrower_range_reaches_full_lock_sooner_and_stays_limited() {
+        let steering = steering();
+        let quarter = steering.center + (steering.right - steering.center) / 4;
+        assert!((steering.respond(quarter, 4.0, 1.0) - 1.0).abs() < 0.001);
+        assert_eq!(steering.respond(steering.right, 4.0, 1.0), 1.0);
+        assert!((steering.respond(quarter, 2.0, 1.0) - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn the_curve_softens_centre_but_keeps_full_lock() {
+        let steering = steering();
+        let quarter = steering.center + (steering.right - steering.center) / 4;
+        assert!((steering.respond(quarter, 1.0, 2.0) - 0.0625).abs() < 0.001);
+        assert_eq!(steering.respond(steering.right, 1.0, 2.0), 1.0);
+        assert_eq!(steering.respond(steering.center, 4.0, 2.0), 0.0);
     }
 
     #[test]

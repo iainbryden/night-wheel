@@ -6,6 +6,7 @@
 use crate::drive::{HAT_DOWN, HAT_LEFT, HAT_RIGHT, HAT_SHIFT, HAT_UP, bit_for};
 use std::collections::BTreeSet;
 use wd_core::assignment::{Action, Bindings};
+use wd_core::config::{Config, STEERING_RANGE, STEERING_SPEED_RANGE};
 use wd_core::input::{ButtonId, Control, Sample};
 use wd_core::listen::{ButtonListener, LISTEN_TIMEOUT_MS, ListenOutcome};
 
@@ -93,6 +94,94 @@ pub fn column_of(row: usize) -> usize {
         .rev()
         .find(|(start, _, _)| *start <= row)
         .map_or(0, |(_, _, column)| *column)
+}
+
+/// The steering sliders on the page, in order.
+pub const SLIDER_COUNT: i32 = 3;
+const RANGE_STEP: i64 = 30;
+const CURVE_STEP: f64 = 0.1;
+const CURVE_RANGE: std::ops::RangeInclusive<f64> = 1.0..=4.0;
+
+/// How far along its range a value is, from 0 to 1.
+fn along(value: f64, low: f64, high: f64) -> f64 {
+    ((value - low) / (high - low)).clamp(0.0, 1.0)
+}
+
+pub fn slider_label(index: i32) -> &'static str {
+    match index {
+        0 => "Steering range",
+        1 => "Center response",
+        2 => "Steering speed (next start)",
+        _ => "",
+    }
+}
+
+pub fn slider_value(index: i32, config: &Config) -> String {
+    match index {
+        0 => format!("{} DEGREES", config.steering_range),
+        1 => format!("{:.1}", config.steering.exponent),
+        2 => format!(
+            "x{}",
+            config
+                .steering_speed
+                .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED))
+        ),
+        _ => String::new(),
+    }
+}
+
+pub fn slider_fraction(index: i32, config: &Config) -> f64 {
+    match index {
+        0 => along(
+            f64::from(config.steering_range),
+            f64::from(*STEERING_RANGE.start()),
+            f64::from(*STEERING_RANGE.end()),
+        ),
+        1 => along(
+            config.steering.exponent,
+            *CURVE_RANGE.start(),
+            *CURVE_RANGE.end(),
+        ),
+        2 => along(
+            config
+                .steering_speed
+                .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED)),
+            *STEERING_SPEED_RANGE.start(),
+            *STEERING_SPEED_RANGE.end(),
+        ),
+        _ => 0.0,
+    }
+}
+
+/// Moves a slider by whole steps, within its limits. Returns true when the value changed.
+pub fn slider_adjust(index: i32, steps: i32, config: &mut Config) -> bool {
+    let before = config.clone();
+    match index {
+        0 => {
+            let moved = i64::from(config.steering_range) + i64::from(steps) * RANGE_STEP;
+            config.steering_range = moved.clamp(
+                i64::from(*STEERING_RANGE.start()),
+                i64::from(*STEERING_RANGE.end()),
+            ) as u32;
+        }
+        1 => {
+            // Whole tenths, so repeated steps don't gather rounding errors in the saved file.
+            let moved = config.steering.exponent + f64::from(steps) * CURVE_STEP;
+            config.steering.exponent =
+                ((moved * 10.0).round() / 10.0).clamp(*CURVE_RANGE.start(), *CURVE_RANGE.end());
+        }
+        2 => {
+            let current = config
+                .steering_speed
+                .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED));
+            config.steering_speed = Some(
+                (current + f64::from(steps))
+                    .clamp(*STEERING_SPEED_RANGE.start(), *STEERING_SPEED_RANGE.end()),
+            );
+        }
+        _ => {}
+    }
+    *config != before
 }
 
 /// How long a row stays lit after its control is pressed, so a dial click can be seen.
@@ -408,6 +497,83 @@ mod tests {
             page: BUTTON_PAGE,
             usage,
         })
+    }
+
+    fn steering_config() -> Config {
+        use wd_core::assignment::Bindings;
+        use wd_core::calibration::{PedalCalibration, SteeringCalibration};
+        use wd_core::config::DeviceId;
+        use wd_core::input::AxisId;
+        use wd_core::wizard::AxisMap;
+        let pedal = PedalCalibration {
+            rest: 255,
+            full: 0,
+            rest_deadzone: 0.0,
+            full_deadzone: 0.0,
+            exponent: 1.0,
+            inverted: false,
+        };
+        let axis = |usage| AxisId { page: 1, usage };
+        Config {
+            device: DeviceId {
+                vendor: 1,
+                product: 2,
+            },
+            axes: AxisMap {
+                steering: axis(0x30),
+                throttle: axis(0x31),
+                brake: axis(0x32),
+            },
+            steering: SteeringCalibration {
+                left: 0,
+                center: 100,
+                right: 200,
+                deadzone: 0.0,
+                exponent: 1.0,
+                sensitivity: 1.0,
+                inverted: false,
+            },
+            throttle: pedal,
+            brake: pedal,
+            bindings: Bindings::default(),
+            boost_percent: 25,
+            steering_range: 900,
+            steering_speed: None,
+        }
+    }
+
+    #[test]
+    fn sliders_step_and_stop_at_their_limits() {
+        let mut config = steering_config();
+        assert!(slider_adjust(0, -1, &mut config));
+        assert_eq!(config.steering_range, 870);
+        assert!(!slider_adjust(0, 1000, &mut steering_config()));
+        slider_adjust(0, -1000, &mut config);
+        assert_eq!(config.steering_range, 180);
+
+        assert!(slider_adjust(1, 3, &mut config));
+        assert_eq!(config.steering.exponent, 1.3);
+        slider_adjust(1, 1000, &mut config);
+        assert_eq!(config.steering.exponent, 4.0);
+        assert!(!slider_adjust(1, 1, &mut config));
+
+        assert!(slider_adjust(2, -8, &mut config));
+        assert_eq!(config.steering_speed, Some(2.0));
+        slider_adjust(2, 1000, &mut config);
+        assert_eq!(config.steering_speed, Some(10.0));
+        config.validate().unwrap();
+    }
+
+    #[test]
+    fn sliders_show_their_values_and_ignore_unknown_numbers() {
+        let mut config = steering_config();
+        assert_eq!(slider_value(0, &config), "900 DEGREES");
+        assert_eq!(slider_value(1, &config), "1.0");
+        assert_eq!(slider_value(2, &config), "x10");
+        assert_eq!(slider_fraction(0, &config), 1.0);
+        assert_eq!(slider_fraction(1, &config), 0.0);
+        assert_eq!(slider_value(9, &config), "");
+        assert!(!slider_adjust(9, 1, &mut config));
     }
 
     #[test]
