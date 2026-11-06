@@ -36,7 +36,8 @@ $lines = Get-ChildItem $stage -Recurse -File | Sort-Object FullName | ForEach-Ob
     $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
     "$hash  $relative"
 }
-Set-Content -Path (Join-Path $pluginFolder 'SHA256SUMS.txt') -Value $lines -Encoding ascii
+# Plain line feeds, so `sha256sum -c` can read the file.
+[IO.File]::WriteAllText((Join-Path $pluginFolder 'SHA256SUMS.txt'), (($lines -join "`n") + "`n"))
 
 $zip = Join-Path $root "dist\$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
