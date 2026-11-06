@@ -58,3 +58,25 @@ Version 0.24.0, not run in the game. The whole page now tries the game's widgets
 - An invisible layer over each row takes the mouse, so the game's controllers shouldn't handle it. Those controllers still exist without a game setting behind them, and how they behave at spawn is untested.
 - The fallback drawing was rebuilt to match the layout.
 - The arrow click areas are placed from the widget file's sizes, and may need adjusting.
+
+## Run of 0.24.0, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. Log kept as `out/game-before/night-wheel-run36.log`. The game's rows and headers now draw, per the user's screenshots. User report:
+
+- The top of the page is cut off.
+- The A and D hints appear on hover but don't work, and the row can't be slid with the mouse.
+- Long values such as "360 DEGREES" cover the knob and the slider.
+- The game's menus have one column and consistent ESC and Restore Defaults prompts. This page has neither.
+
+The log says `game row: slider controller missing` 32 times, so `GetController` on `layout/container` returned nothing that casts to `inkSliderController`, and the knob can't follow the value. The hints showing on hover mean the row's own controllers still respond, despite the layer meant to take the mouse. So only the look is the game's. The behaviour is this mod's, and each missing behaviour would have to be rebuilt by hand.
+
+## The Settings menu is data driven
+
+`r6\config\settings\options.json` (about 95 KB) and `r6\config\settings\platform\pc\options.json` (about 118 KB) define the menu. The PC file has `version` 152, `groups` and `options`, and each option names its group, such as `/audio/misc`, with fields such as `display_name`, `description`, `order`, `is_visible`, `in_pre_game`, `in_game`, `update_policy`, `type`, `default_value` and `value`. The tabs appear to come from the top of each group's name. `SettingsMainGameController` has `PopulateCategories`, `PopulateCategorySettingsOptions` and `PopulateSettingsData`. How the game treats a new group is untested.
+
+This suggests a real WHEEL tab: add a group and options to the data, and let the game draw and run them, including mouse sliding, A and D, ESC and Restore Defaults. The script already reads a game setting this way, for radio volume. The costs:
+
+- It overwrites a base game file. A patch or file check would restore it and remove the tab, and other mods editing that file would conflict. It needs a backup, and uninstall must restore the file.
+- The game's rows don't appear able to listen for a wheel press. Bindings might use a list of controls per function, or stay on this page.
+
+A search for an official settings API found only articles from the 2021 launch of the official tools, and nothing on this. Community settings mods exist, but this project doesn't depend on them or read their source.
