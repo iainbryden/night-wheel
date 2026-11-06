@@ -38,6 +38,8 @@ native func NightWheel_SliderLabel(index: Int32) -> String;
 native func NightWheel_SliderValue(index: Int32) -> String;
 native func NightWheel_SliderFraction(index: Int32) -> Float;
 native func NightWheel_SliderAdjust(index: Int32, steps: Int32);
+native func NightWheel_SliderNumber(index: Int32) -> Float;
+native func NightWheel_SliderSet(index: Int32, number: Float);
 native func NightWheel_ScreenHints() -> String;
 
 public class NightWheelSteeringRates extends ScriptableTweak {
@@ -207,6 +209,7 @@ public class NightWheelService extends ScriptableService {
     private cb func OnSessionReady(event: ref<GameSessionEvent>) {
         NightWheel_Event("session-ready");
         this.ResetVehicleState("session start");
+        this.SyncSettingsTab(true);
         if !this.m_active {
             this.m_active = true;
             this.ScheduleTick();
@@ -222,6 +225,7 @@ public class NightWheelService extends ScriptableService {
     private cb func OnSessionResume(event: ref<GameSessionEvent>) {
         this.m_paused = false;
         NightWheel_Event("session-resume");
+        this.SyncSettingsTab(false);
         this.HideAll();
     }
 
@@ -234,6 +238,59 @@ public class NightWheelService extends ScriptableService {
         NightWheel_SetDriving(false);
         NightWheel_Event("session-end");
         this.HideAll();
+    }
+
+    // The WHEEL tab in the game's Settings menu holds these values as game settings. Starting a
+    // session copies the mod's saved values into the tab. After that, a change made in the tab is
+    // copied back when leaving the menu. Without the tab, as after a game patch restores the file,
+    // this does nothing and the mod's saved values still apply.
+    private func TabVar(index: Int32) -> ref<ConfigVar> {
+        let names: array<CName>;
+        ArrayPush(names, n"SteeringRange");
+        ArrayPush(names, n"CenterResponse");
+        ArrayPush(names, n"SteeringSpeed");
+        ArrayPush(names, n"BoostStrength");
+        let settings = GameInstance.GetSettingsSystem(GetGameInstance());
+        if !settings.HasVar(n"/wheel/driving", names[index]) {
+            let none: ref<ConfigVar>;
+            return none;
+        }
+        return settings.GetVar(n"/wheel/driving", names[index]);
+    }
+
+    private func SyncSettingsTab(seed: Bool) {
+        let index = 0;
+        while index < 4 {
+            let setting = this.TabVar(index);
+            if !IsDefined(setting) {
+                if seed {
+                    NightWheel_Event("settings tab: not found");
+                }
+                return;
+            }
+            let whole = setting as ConfigVarInt;
+            let part = setting as ConfigVarFloat;
+            let current = IsDefined(whole) ? Cast<Float>(whole.GetValue()) : (IsDefined(part) ? part.GetValue() : 0.0);
+            let saved = NightWheel_SliderNumber(index);
+            if seed {
+                if IsDefined(whole) {
+                    whole.SetValue(Cast<Int32>(saved));
+                } else {
+                    if IsDefined(part) {
+                        part.SetValue(saved);
+                    }
+                }
+            } else {
+                if AbsF(current - saved) > 0.001 {
+                    NightWheel_Event(s"settings tab: value \(index) is now \(FloatToString(current))");
+                    NightWheel_SliderSet(index, current);
+                }
+            }
+            index += 1;
+        }
+        if seed {
+            NightWheel_Event("settings tab: filled from saved values");
+        }
     }
 
     // Boost, flight and Autodrive belong to one session. Flight's saved position must never move a
@@ -299,6 +356,9 @@ public class NightWheelService extends ScriptableService {
         if NotEquals(inMenu, this.m_inMenu) {
             this.m_inMenu = inMenu;
             NightWheel_Event(s"in-menu: \(inMenu)");
+            if !inMenu {
+                this.SyncSettingsTab(false);
+            }
         }
         let driving = !inMenu && IsDefined(player) && VehicleComponent.IsDriver(game, player);
         NightWheel_SetDriving(driving);

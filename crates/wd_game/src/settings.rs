@@ -199,6 +199,54 @@ pub fn slider_adjust(index: i32, steps: i32, config: &mut Config) -> bool {
     *config != before
 }
 
+/// A slider's value as a plain number, for the game's own Settings menu.
+pub fn slider_number(index: i32, config: &Config) -> f64 {
+    match index {
+        0 => f64::from(config.steering_range),
+        1 => config.steering.exponent,
+        2 => config
+            .steering_speed
+            .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED)),
+        3 => f64::from(config.boost_percent),
+        _ => 0.0,
+    }
+}
+
+/// Sets a slider from a plain number, within its limits. Returns true when the value changed.
+pub fn slider_set(index: i32, number: f64, config: &mut Config) -> bool {
+    if !number.is_finite() {
+        return false;
+    }
+    let before = config.clone();
+    match index {
+        0 => {
+            config.steering_range = number.round().clamp(
+                f64::from(*STEERING_RANGE.start()),
+                f64::from(*STEERING_RANGE.end()),
+            ) as u32;
+        }
+        1 => {
+            config.steering.exponent =
+                ((number * 10.0).round() / 10.0).clamp(*CURVE_RANGE.start(), *CURVE_RANGE.end());
+        }
+        2 => {
+            config.steering_speed = Some(
+                number
+                    .round()
+                    .clamp(*STEERING_SPEED_RANGE.start(), *STEERING_SPEED_RANGE.end()),
+            );
+        }
+        3 => {
+            config.boost_percent = number.round().clamp(
+                f64::from(*BOOST_PERCENT_RANGE.start()),
+                f64::from(*BOOST_PERCENT_RANGE.end()),
+            ) as u32;
+        }
+        _ => {}
+    }
+    *config != before
+}
+
 /// How long a row stays lit after its control is pressed, so a dial click can be seen.
 const LIT_MS: u64 = 300;
 
@@ -555,6 +603,26 @@ mod tests {
             steering_range: 900,
             steering_speed: None,
         }
+    }
+
+    #[test]
+    fn numbers_from_the_game_menu_are_limited_and_read_back() {
+        let mut config = steering_config();
+        assert!(slider_set(0, 360.0, &mut config));
+        assert_eq!(slider_number(0, &config), 360.0);
+        assert!(!slider_set(0, 360.0, &mut config), "no change");
+        slider_set(0, 5000.0, &mut config);
+        assert_eq!(config.steering_range, 900);
+        // A menu's float steps can arrive slightly off a tenth.
+        slider_set(1, 1.3000001, &mut config);
+        assert_eq!(config.steering.exponent, 1.3);
+        slider_set(2, 4.0, &mut config);
+        assert_eq!(config.steering_speed, Some(4.0));
+        slider_set(3, 150.0, &mut config);
+        assert_eq!(slider_number(3, &config), 150.0);
+        assert!(!slider_set(3, f64::NAN, &mut config));
+        assert!(!slider_set(9, 1.0, &mut config));
+        config.validate().unwrap();
     }
 
     #[test]

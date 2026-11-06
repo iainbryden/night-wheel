@@ -80,3 +80,13 @@ This suggests a real WHEEL tab: add a group and options to the data, and let the
 - The game's rows don't appear able to listen for a wheel press. Bindings might use a list of controls per function, or stay on this page.
 
 A search for an official settings API found only articles from the 2021 launch of the official tools, and nothing on this. Community settings mods exist, but this project doesn't depend on them or read their source.
+
+## WHEEL tab test
+
+Chosen by the user. Version 0.25.0, plus `scripts/settings_tab.py`, which inserts a `/wheel` group at order 10, a `/wheel/driving` section and four options into `r6\config\settings\platform\pc\options.json`, without changing existing lines. It keeps a copy of the original in `out/game-before/`, and removing the tab restores that copy only if the file is unchanged since.
+
+- The tab's values start from the mod's saved values when a session starts, and changes flow back when leaving the menu. So changes made in the main menu before loading a game are overwritten by the saved values. That's a known weakness of this test.
+- The labels are plain text rather than the game's localization keys, and how the menu treats that is untested.
+- Without the tab, the mod's saved values still apply.
+- The settings page keeps its own sliders for now, so the two can be compared.
+- This is the first time this project changes a base game file rather than adding files.

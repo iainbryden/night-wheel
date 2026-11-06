@@ -33,7 +33,7 @@ static SETTINGS: Mutex<Option<Config>> = Mutex::new(None);
 static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
-const VERSION_MINOR: u16 = 24;
+const VERSION_MINOR: u16 = 25;
 const VERSION_PATCH: u32 = 0;
 
 struct NightWheel;
@@ -80,6 +80,8 @@ impl Plugin for NightWheel {
             GlobalExport(global!(c"NightWheel_SliderValue", slider_value)),
             GlobalExport(global!(c"NightWheel_SliderFraction", slider_fraction)),
             GlobalExport(global!(c"NightWheel_SliderAdjust", slider_adjust)),
+            GlobalExport(global!(c"NightWheel_SliderNumber", slider_number)),
+            GlobalExport(global!(c"NightWheel_SliderSet", slider_set)),
             GlobalExport(global!(c"NightWheel_ScreenHints", screen_hints)),
         ]
     }
@@ -360,23 +362,48 @@ fn slider_fraction(index: i32) -> f32 {
         })
 }
 
-/// Moves a steering slider, applies range and curve at once, and saves.
+/// Moves a slider on the settings page.
 fn slider_adjust(index: i32, steps: i32) {
     let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
     let Some(config) = settings.as_mut() else {
         return;
     };
-    if !settings::slider_adjust(index, steps, config) {
-        return;
+    if settings::slider_adjust(index, steps, config) {
+        steering_changed(config);
     }
+}
+
+fn slider_number(index: i32) -> f32 {
+    SETTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map_or(0.0, |config| settings::slider_number(index, config) as f32)
+}
+
+/// Takes a value from the game's own Settings menu.
+fn slider_set(index: i32, number: f32) {
+    let mut settings = SETTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(config) = settings.as_mut()
+        && settings::slider_set(index, f64::from(number), config)
+    {
+        steering_changed(config);
+    }
+}
+
+/// Applies range and curve at once, and saves.
+fn steering_changed(config: &Config) {
     shared::set_tuning(drive::Tuning::of(config));
     let saved = config::profile_path()
         .ok_or_else(|| "no settings folder".to_owned())
         .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
     match saved {
         Ok(()) => log_file::send(format!(
-            "steering saved: range {} curve {} speed {:?}",
-            config.steering_range, config.steering.exponent, config.steering_speed
+            "steering saved: range {} curve {} speed {:?} boost {}",
+            config.steering_range,
+            config.steering.exponent,
+            config.steering_speed,
+            config.boost_percent
         )),
         Err(problem) => log_file::send(format!("steering not saved: {problem}")),
     }
