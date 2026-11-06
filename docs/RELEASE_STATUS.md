@@ -1,6 +1,6 @@
 # Release status
 
-Date: 2026-11-05. Version 0.21.1, on branch `main`. See [the code review](reviews/P6-code-review.md) for fixes awaiting a game test.
+Date: 2026-11-05. Version 0.21.2, on branch `main`. See [the code review](reviews/P6-code-review.md) for fixes awaiting a game test.
 
 **Night Wheel isn't ready for release.** The code is ready for review. It is missing features the product requirements call for, and most of the required lifecycle tests have no recorded result. A public preview would need a decision to reduce the requirements for that preview.
 
@@ -12,7 +12,7 @@ Date: 2026-11-05. Version 0.21.1, on branch `main`. See [the code review](review
 |---|---|---|
 | Steering and pedals | Works | User report; `docs/decisions/D20-steering-rate-test.md` |
 | One-press binding on an in-game page | Works | User report; `docs/decisions/D22-settings-page-input.md` |
-| Boost | Works, but has no duration limit or cooldown | User report; `docs/decisions/D23-boost-test.md` |
+| Boost | Works. The 5 second limit and 3 second cooldown are provisional and untested | User report before the limit; `docs/decisions/D23-boost-test.md` |
 | Flight with Climb and Descend | Works, and passes through buildings | User report; `docs/decisions/D25-flight-test.md` |
 | Vehicle function bindings | Mostly work | User report; horn only worked once per car entry |
 | Radio controls | Work | User report |
@@ -39,7 +39,7 @@ Date: 2026-11-05. Version 0.21.1, on branch `main`. See [the code review](review
 Release requirements:
 
 1. Build or formally defer force feedback, LEDs and the transmission.
-2. Give boost bounded duration and cooldown.
+2. Try boost's duration and cooldown on the wheel and settle their values.
 3. Record lifecycle tests: save and reload during play, pause, Alt-Tab, wheel disconnect, rebinding, leaving the car and shutdown.
 4. Add a game version gate. Nothing yet stops the plugin on an untested patch.
 5. Detect conflicting wheel mods and explain them.

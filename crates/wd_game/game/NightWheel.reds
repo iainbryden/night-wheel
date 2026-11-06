@@ -27,6 +27,7 @@ native func NightWheel_ScreenBoostRow() -> Int32;
 native func NightWheel_BoostPercent() -> Int32;
 native func NightWheel_BoostAdjust(steps: Int32);
 native func NightWheel_BoostWanted() -> Bool;
+native func NightWheel_BoostHeld() -> Bool;
 native func NightWheel_ScriptHeld() -> Int32;
 native func NightWheel_Throttle() -> Float;
 native func NightWheel_Brake() -> Float;
@@ -160,6 +161,10 @@ public class NightWheelService extends ScriptableService {
     private let m_lastBoostEnd: Float;
     private let m_autopilot: Bool;
     private let m_boosting: Bool;
+    private let m_boostButtonHeld: Bool;
+    private let m_boostBurstStart: Float;
+    private let m_boostCooldownEnd: Float;
+    private let m_boostLimitSet: Bool;
     private let m_boostPeak: Float;
     private let m_boostLimit: Float;
     private let m_topSeen: Float;
@@ -221,6 +226,9 @@ public class NightWheelService extends ScriptableService {
         this.EndBoost(reason);
         this.EndFlight(reason);
         this.m_flightClimbHeld = false;
+        this.m_boostButtonHeld = false;
+        // Game time may restart with a session, and an old end time could block boost for too long.
+        this.m_boostCooldownEnd = 0.0;
         if this.m_autopilot {
             this.m_autopilot = false;
             NightWheel_SetAutopilot(false);
@@ -283,6 +291,7 @@ public class NightWheelService extends ScriptableService {
                 this.RunRadioActions(player, actions);
             }
             this.UpdateAutopilot(player);
+            this.UpdateBoostBurst();
             this.UpdateBoost(player);
             this.UpdateFlight(player);
         } else {
@@ -323,16 +332,44 @@ public class NightWheelService extends ScriptableService {
         }
     }
 
-    // Boost pushes the car forward through the physics system while the control is held, up to a
-    // limit above the fastest speed seen without boost. It changes no vehicle data and saves
-    // nothing. The push strength is a provisional test value.
+    // A boost burst lasts up to 5 seconds, and any end to it starts a 3 second cooldown. A new burst
+    // takes a fresh press of the button once the cooldown is over, so tapping can't get round the
+    // limit and holding can't restart it. Driving and flight share this one timer, so switching
+    // between them can't reset it. Both times are provisional.
+    private func UpdateBoostBurst() {
+        let now = this.SimNow();
+        let held = NightWheel_BoostHeld();
+        let pressed = held && !this.m_boostButtonHeld;
+        this.m_boostButtonHeld = held;
+        let wanted = NightWheel_BoostWanted() && !this.m_autopilot;
+        if this.m_boosting {
+            if !wanted {
+                this.EndBoost("released");
+            } else {
+                if now - this.m_boostBurstStart >= 5.0 {
+                    this.EndBoost("time limit");
+                }
+            }
+        } else {
+            if pressed && wanted && now >= this.m_boostCooldownEnd {
+                this.m_boosting = true;
+                this.m_boostLimitSet = false;
+                this.m_boostBurstStart = now;
+                NightWheel_Event("boost: burst on");
+            }
+        }
+    }
+
+    private func SimNow() -> Float {
+        return EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
+    }
+
+    // During a burst, boost pushes the car forward through the physics system, up to a limit above
+    // the fastest speed seen without boost. In flight, thrust is added in UpdateFlight instead. It
+    // changes no vehicle data and saves nothing. The push strength is a provisional value.
     private func UpdateBoost(player: ref<PlayerPuppet>) {
         let vehicle = GetMountedVehicle(player);
-        if !IsDefined(vehicle) {
-            return;
-        }
-        if this.m_flying {
-            this.EndBoost("flying");
+        if !IsDefined(vehicle) || this.m_flying {
             return;
         }
         let id = vehicle.GetEntityID();
@@ -342,24 +379,23 @@ public class NightWheelService extends ScriptableService {
             this.EndBoost("new vehicle");
         }
         let speed = vehicle.GetCurrentSpeed();
-        let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
+        let now = this.SimNow();
         let elapsed = now - this.m_lastBoostTime;
         this.m_lastBoostTime = now;
-        if !NightWheel_BoostWanted() || this.m_autopilot {
-            this.EndBoost("released");
+        if !this.m_boosting {
             if speed > this.m_topSeen && now - this.m_lastBoostEnd > 15.0 {
                 this.m_topSeen = speed;
             }
             return;
         }
         let percent = Cast<Float>(NightWheel_BoostPercent());
-        if !this.m_boosting {
-            this.m_boosting = true;
+        if !this.m_boostLimitSet {
+            this.m_boostLimitSet = true;
             this.m_boostPeak = speed;
             // With no fast speed seen yet, a press at a crawl still needs room to accelerate.
             let reference = MaxF(MaxF(this.m_topSeen, speed), 20.0);
             this.m_boostLimit = reference * (1.0 + percent / 100.0);
-            NightWheel_Event(s"boost: on at \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
+            NightWheel_Event(s"boost: pushing from \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
         }
         if speed > this.m_boostPeak {
             this.m_boostPeak = speed;
@@ -435,7 +471,7 @@ public class NightWheelService extends ScriptableService {
         let along = this.m_flightVX * aheadX + this.m_flightVY * aheadY;
         let across = this.m_flightVX * sideX + this.m_flightVY * sideY;
         let boostPercent = Cast<Float>(NightWheel_BoostPercent());
-        let boosting = NightWheel_BoostWanted();
+        let boosting = this.m_boosting;
         let thrust = NightWheel_Throttle() * 15.0;
         if boosting {
             thrust += MinF(6.0 + boostPercent * 0.12, 30.0);
@@ -554,6 +590,7 @@ public class NightWheelService extends ScriptableService {
     private func EndBoost(reason: String) {
         if this.m_boosting {
             this.m_boosting = false;
+            this.m_boostCooldownEnd = this.SimNow() + 3.0;
             NightWheel_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
         }
     }

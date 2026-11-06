@@ -7,7 +7,7 @@ A Logitech G29 driving mod for Cyberpunk 2077 on Windows, written independently 
 - Steers and drives with the G29, using calibrated steering and pedals.
 - Has a **WHEEL SETTINGS** page in the pause menu, where you bind wheel controls to functions with one press.
 - Controls vehicle functions, the camera and the radio from the wheel.
-- Adds boost, with an adjustable strength.
+- Adds boost, with an adjustable strength. A burst lasts up to 5 seconds, then has a 3 second cooldown, and each burst takes a fresh press.
 - Adds flight: **Climb** lifts the car and keeps rising while held. **Descend** lowers it, and holding it at the ground for half a second ends flight. Flight doesn't check for buildings ahead, so the car can pass through them.
 
 Force feedback, wheel LEDs and manual shifting don't exist yet. The mod sends nothing to the wheel.

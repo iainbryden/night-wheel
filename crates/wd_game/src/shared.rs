@@ -237,6 +237,12 @@ fn script_inputs_live() -> bool {
         && micros_since_start(Instant::now()).saturating_sub(polled) <= drive::HEARTBEAT_LIMIT_US
 }
 
+/// Whether the boost button itself is held, whatever the brake is doing. A new burst takes a fresh
+/// press of this, so letting go of the brake doesn't count as one.
+pub fn boost_held() -> bool {
+    script_inputs_live() && BOOST_HELD.load(Ordering::Relaxed)
+}
+
 /// Whether boost should push the car now. Touching the brake ends it.
 pub fn boost_wanted() -> bool {
     script_inputs_live()
@@ -365,12 +371,18 @@ mod tests {
         SCRIPT_PENDING.store(1, Ordering::Relaxed);
         set_pedals(255, 0);
         assert!(boost_wanted());
+        assert!(boost_held());
+        BRAKE_CLEAR.store(false, Ordering::Relaxed);
+        assert!(!boost_wanted(), "the brake ends boost");
+        assert!(boost_held(), "but the button is still held");
+        BRAKE_CLEAR.store(true, Ordering::Relaxed);
         assert_eq!(script_held(), 128);
         assert_eq!(pedal(0), 1.0);
 
         // Losing focus hides it without clearing it.
         set_driving(true, false);
         assert!(!boost_wanted());
+        assert!(!boost_held());
         assert_eq!(script_held(), 0);
         assert_eq!(pedal(0), 0.0);
         assert_eq!(take_script_actions(), 0);

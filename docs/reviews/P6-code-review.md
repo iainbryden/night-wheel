@@ -16,9 +16,17 @@ The fixes are in version 0.21.1. They have passed automated tests and an offline
 | 4 | Unload can return while worker threads still run | Confirmed | The log thread now notices a stop request within 100 ms. If a thread still hasn't ended after its wait, the library stays loaded until the process ends. This was chosen over an unlimited wait, which could hang the game's shutdown |
 | 5 | Boost can do nothing on the first press after a crawl | Confirmed | The speed limit is now based on at least 20 in the game's speed units, a provisional value. Above that speed, behaviour doesn't change |
 
+## Added after the review
+
+Version 0.21.2 adds boost's limits, using the user's values and rules. All are untested in the game, and the times are provisional until tried on the G29.
+
+- A burst lasts up to 5 seconds.
+- Any end to a burst starts a 3 second cooldown, including release and braking.
+- A new burst takes a fresh press of the button after the cooldown, so holding can't restart it, tapping can't get round the limit, and letting go of the brake doesn't count as a press.
+- Driving and flight share one timer, so switching between them can't reset it. A new session clears the cooldown, because game time may restart with a session.
+
 ## Not changed
 
-- **Boost duration limit and cooldown:** still required for release. Their values change how boost feels, so they need the user's choice.
 - **Flight after losing the wheel:** the car stays in the air and coasts, because Descend comes from the wheel. Leaving the car ends flight.
 - **Status messages:** the settings page still doesn't separate a disconnected wheel, an unsupported wheel mode or a failed hook.
 - **Steering speed:** still set in a text file.
@@ -31,4 +39,6 @@ The fixes are in version 0.21.1. They have passed automated tests and an offline
 2. Reload a save while flying, and leave a car while flying and enter another.
 3. Hold a bound button through a pause, a load and Alt-Tab. It must not act until released and pressed again.
 4. Press boost from a crawl in a car just entered.
-5. Quit to desktop, and check for a clean shutdown in the log.
+5. Hold boost for over 5 seconds: it should stop and stay off until a new press after the cooldown.
+6. Tap boost quickly, brake during a burst, and switch into flight during a burst. None should restart or extend it.
+7. Quit to desktop, and check for a clean shutdown in the log.

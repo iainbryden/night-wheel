@@ -34,7 +34,7 @@ static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
 const VERSION_MINOR: u16 = 21;
-const VERSION_PATCH: u32 = 1;
+const VERSION_PATCH: u32 = 2;
 
 struct NightWheel;
 
@@ -69,6 +69,7 @@ impl Plugin for NightWheel {
             GlobalExport(global!(c"NightWheel_BoostPercent", boost_percent)),
             GlobalExport(global!(c"NightWheel_BoostAdjust", boost_adjust)),
             GlobalExport(global!(c"NightWheel_BoostWanted", boost_wanted)),
+            GlobalExport(global!(c"NightWheel_BoostHeld", boost_held)),
             GlobalExport(global!(c"NightWheel_ScriptHeld", script_held)),
             GlobalExport(global!(c"NightWheel_Throttle", throttle)),
             GlobalExport(global!(c"NightWheel_Brake", brake)),
@@ -332,6 +333,10 @@ fn brake() -> f32 {
 
 fn boost_wanted() -> bool {
     shared::boost_wanted()
+}
+
+fn boost_held() -> bool {
+    shared::boost_held()
 }
 
 fn set_autopilot(on: bool) {
