@@ -148,7 +148,6 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_inMenu: Bool;
     private let m_turn: Float;
     private let m_flying: Bool;
-    private let m_landing: Bool;
     private let m_flightStart: Float;
     private let m_flightTarget: Float;
     private let m_flightLastTime: Float;
@@ -289,7 +288,7 @@ public class WheelDriveTestService extends ScriptableService {
             }
             this.UpdateAutopilot(player);
             this.UpdateBoost(player);
-            this.UpdateFlight(player, (actions & 64) != 0);
+            this.UpdateFlight(player);
         } else {
             this.EndBoost("not driving");
             if !inMenu {
@@ -386,32 +385,23 @@ public class WheelDriveTestService extends ScriptableService {
     // Flight mode sets the car's position and heading each frame through the game's teleport
     // function, so gravity and tire physics no longer decide where it goes. The mod simulates
     // motion: the wheel sets a turn rate, the pedals give thrust and braking, and momentum carries.
-    // A ray down to the ground stops it going below ground and ends a landing. Nothing here checks
-    // for buildings ahead. Every strength is a provisional test value. It changes no vehicle data
-    // and saves nothing.
-    private func UpdateFlight(player: ref<PlayerPuppet>, toggled: Bool) {
+    // Climb starts flight, and holding Descend at the ground ends it. A ray down to the ground stops
+    // it going below ground. Nothing here checks for buildings ahead, so it can pass through them.
+    // Every strength is a provisional value. It changes no vehicle data and saves nothing.
+    private func UpdateFlight(player: ref<PlayerPuppet>) {
         let vehicle = GetMountedVehicle(player);
         if !IsDefined(vehicle) {
             return;
         }
         let game = GetGameInstance();
-        // A fresh press of Climb starts flight when it is off, or takes back a landing.
+        // A fresh press of Climb starts flight when it is off.
         let held = WheelDriveTest_ScriptHeld();
         let climbHeld = (held & 128) != 0;
         let descendHeld = (held & 256) != 0;
         let climbPressed = climbHeld && !this.m_flightClimbHeld;
         this.m_flightClimbHeld = climbHeld;
-        if toggled {
-            if this.m_flying && !this.m_landing {
-                this.m_landing = true;
-                WheelDriveTest_Event("flight: landing");
-            } else {
-                this.StartFlight(vehicle);
-            }
-        } else {
-            if climbPressed && !this.m_autopilot && (!this.m_flying || this.m_landing) {
-                this.StartFlight(vehicle);
-            }
+        if climbPressed && !this.m_autopilot && !this.m_flying {
+            this.StartFlight(vehicle);
         }
         let now = EngineTime.ToFloat(GameInstance.GetSimTime(game));
         let elapsed = MinF(now - this.m_flightLastTime, 0.1);
@@ -467,7 +457,7 @@ public class WheelDriveTestService extends ScriptableService {
         }
         this.m_flightTarget = ClampF(this.m_flightTarget, this.m_flightStart - 400.0, this.m_flightStart + 400.0);
         this.m_flightTarget = ClampF(this.m_flightTarget, this.m_flightZ - 15.0, this.m_flightZ + 15.0);
-        let wantedRise = this.m_landing ? -8.0 : ClampF((this.m_flightTarget - this.m_flightZ) * 2.0, -15.0, 15.0);
+        let wantedRise = ClampF((this.m_flightTarget - this.m_flightZ) * 2.0, -15.0, 15.0);
         this.m_flightVZ += (wantedRise - this.m_flightVZ) * MinF(elapsed * 4.0, 1.0);
 
         // Move.
@@ -490,11 +480,6 @@ public class WheelDriveTestService extends ScriptableService {
                     this.m_flightVZ = 0.0;
                 }
             }
-        }
-        // With no ground found, a landing ends at the height where flight began.
-        if this.m_landing && (clearance < 1.2 || (!groundKnown && z <= this.m_flightStart)) {
-            this.EndFlight("landed");
-            return;
         }
         // Holding Descend at the ground for half a second ends flight. A ray has to see the
         // ground, so this never drops the car from the air.
@@ -546,7 +531,6 @@ public class WheelDriveTestService extends ScriptableService {
         let begin = vehicle.GetWorldPosition();
         let moving = vehicle.GetLinearVelocity();
         this.m_flying = true;
-        this.m_landing = false;
         this.m_flightStart = begin.Z;
         this.m_flightTarget = begin.Z + 3.0;
         this.m_flightX = begin.X;
@@ -572,7 +556,6 @@ public class WheelDriveTestService extends ScriptableService {
     private func EndFlight(reason: String) {
         if this.m_flying {
             this.m_flying = false;
-            this.m_landing = false;
             WheelDriveTest_Event(s"flight: off, \(reason)");
         }
     }

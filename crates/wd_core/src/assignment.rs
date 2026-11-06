@@ -1,7 +1,7 @@
 //! Which control triggers which action.
 //!
-//! These are saved choices only. No action reaches the game at this stage, and
-//! whether each one can work in the game has yet to be proven.
+//! These are saved choices. The game plugin decides which of them reach the game: shifting and
+//! changing profile have no game route yet.
 
 use crate::input::{Control, Sample};
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,14 +33,13 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     Scanner,
-    Flight,
     FlyUp,
     FlyDown,
 }
 
 impl Action {
     /// Every action, in display order.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 26] = [
         Self::ShiftUp,
         Self::ShiftDown,
         Self::TransmissionToggle,
@@ -65,7 +64,6 @@ impl Action {
         Self::ZoomIn,
         Self::ZoomOut,
         Self::Scanner,
-        Self::Flight,
         Self::FlyUp,
         Self::FlyDown,
     ];
@@ -97,7 +95,6 @@ impl Action {
             Self::ZoomIn => "zoom_in",
             Self::ZoomOut => "zoom_out",
             Self::Scanner => "scanner",
-            Self::Flight => "hover",
             Self::FlyUp => "fly_up",
             Self::FlyDown => "fly_down",
         }
@@ -130,9 +127,8 @@ impl Action {
             Self::ZoomIn => "Zoom in",
             Self::ZoomOut => "Zoom out",
             Self::Scanner => "Scanner",
-            Self::Flight => "Flight mode",
-            Self::FlyUp => "Climb",
-            Self::FlyDown => "Descend",
+            Self::FlyUp => "Climb / start flight",
+            Self::FlyDown => "Descend / land",
         }
     }
 

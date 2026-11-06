@@ -21,6 +21,10 @@ pub const FORMAT_VERSION: u32 = 1;
 
 const BINDING_PREFIX: &str = "binding.";
 
+/// Saved names of functions that no longer exist. Older files may hold them, and that must not make
+/// the whole file unusable. Saving drops them.
+const RETIRED_BINDINGS: [&str; 1] = ["hover"];
+
 /// The device a configuration was calibrated on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeviceId {
@@ -243,6 +247,12 @@ impl Config {
             config.boost_percent = fields.take("boost.percent")?;
         }
         for (key, value) in fields.values {
+            if key
+                .strip_prefix(BINDING_PREFIX)
+                .is_some_and(|name| RETIRED_BINDINGS.contains(&name))
+            {
+                continue;
+            }
             let action = key
                 .strip_prefix(BINDING_PREFIX)
                 .and_then(Action::from_key)
@@ -426,6 +436,14 @@ mod tests {
 
     fn axis(usage: u16) -> AxisId {
         AxisId { page: 1, usage }
+    }
+
+    #[test]
+    fn a_retired_binding_is_ignored_and_dropped_on_saving() {
+        let older = format!("{}binding.hover = button:0009:0008\n", sample().to_text());
+        let parsed = Config::parse(&older).unwrap();
+        assert_eq!(parsed.bindings, sample().bindings);
+        assert!(!parsed.to_text().contains("hover"));
     }
 
     #[test]
