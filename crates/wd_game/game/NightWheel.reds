@@ -156,6 +156,12 @@ public class NightWheelService extends ScriptableService {
     private let m_flightVX: Float;
     private let m_flightVY: Float;
     private let m_flightVZ: Float;
+    private let m_carrying: Bool;
+    private let m_carryVehicle: EntityID;
+    private let m_carrySpeed: Float;
+    private let m_carryLast: Float;
+    private let m_carryEnd: Float;
+    private let m_carryLogged: Float;
     private let m_flightClimbHeld: Bool;
     private let m_flightGroundHeld: Float;
     private let m_lastBoostEnd: Float;
@@ -226,6 +232,7 @@ public class NightWheelService extends ScriptableService {
         this.EndBoost(reason);
         this.EndFlight(reason);
         this.m_flightClimbHeld = false;
+        this.m_carrying = false;
         this.m_boostButtonHeld = false;
         // Game time may restart with a session, and an old end time could block boost for too long.
         this.m_boostCooldownEnd = 0.0;
@@ -294,8 +301,10 @@ public class NightWheelService extends ScriptableService {
             this.UpdateBoostBurst();
             this.UpdateBoost(player);
             this.UpdateFlight(player);
+            this.UpdateLandingCarry(player);
         } else {
             this.EndBoost("not driving");
+            this.m_carrying = false;
             if !inMenu {
                 this.EndFlight("not driving");
             }
@@ -523,13 +532,7 @@ public class NightWheelService extends ScriptableService {
             this.m_flightGroundHeld += elapsed;
             if this.m_flightGroundHeld >= 0.5 {
                 this.EndFlight("descend held at ground");
-                // The physics barely see the car move during flight, so it would stop dead. One push
-                // hands over its forward speed, up to what it has reached on the road, so a fast
-                // landing can't launch it. The floor of 20 matches boost's, and is provisional.
-                let carried = MinF(along, MaxF(this.m_topSeen, 20.0));
-                let carry = carried * vehicle.GetTotalMass();
-                this.Push(vehicle, vehicle.GetWorldPosition(), aheadX * carry, aheadY * carry, 0.0);
-                NightWheel_Event(s"flight: landed at \(FloatToString(along)), carried \(FloatToString(carried))");
+                this.StartLandingCarry(vehicle, along);
                 return;
             }
         } else {
@@ -547,6 +550,61 @@ public class NightWheelService extends ScriptableService {
 
         // Cancels the gravity that would otherwise build up between frames.
         this.Push(vehicle, vehicle.GetWorldPosition(), 0.0, 0.0, vehicle.GetTotalMass() * 9.81 * elapsed);
+    }
+
+    // The physics barely see the car move during flight, so on landing it would stop dead. For one
+    // second this wakes the physics and pushes up to the speed it flew at, measuring the real speed
+    // each frame so a push that falls short is made up. The speed is capped at what the car has
+    // reached on the road, or 40, so a fast landing can't launch it. Braking ends it early. The cap,
+    // time and strength are provisional, and each step is logged for tuning.
+    private func StartLandingCarry(vehicle: ref<VehicleObject>, along: Float) {
+        this.m_carrying = true;
+        this.m_carryVehicle = vehicle.GetEntityID();
+        this.m_carrySpeed = MinF(along, MaxF(this.m_topSeen, 40.0));
+        this.m_carryLast = this.SimNow();
+        this.m_carryEnd = this.m_carryLast + 1.0;
+        this.m_carryLogged = 0.0;
+        NightWheel_Event(s"landing: flew at \(FloatToString(along)), holding \(FloatToString(this.m_carrySpeed))");
+    }
+
+    private func UpdateLandingCarry(player: ref<PlayerPuppet>) {
+        if !this.m_carrying {
+            return;
+        }
+        let vehicle = GetMountedVehicle(player);
+        let now = this.SimNow();
+        let elapsed = MinF(now - this.m_carryLast, 0.1);
+        if !IsDefined(vehicle) || this.m_flying || now >= this.m_carryEnd || NightWheel_Brake() > 0.1 {
+            this.m_carrying = false;
+            NightWheel_Event("landing: done");
+            return;
+        }
+        if NotEquals(vehicle.GetEntityID(), this.m_carryVehicle) {
+            this.m_carrying = false;
+            return;
+        }
+        if elapsed <= 0.0 {
+            return;
+        }
+        this.m_carryLast = now;
+        vehicle.PhysicsWakeUp();
+        let forward = vehicle.GetWorldForward();
+        let flat = SqrtF(forward.X * forward.X + forward.Y * forward.Y);
+        if flat < 0.1 {
+            return;
+        }
+        let aheadX = forward.X / flat;
+        let aheadY = forward.Y / flat;
+        let moving = vehicle.GetLinearVelocity();
+        let speed = moving.X * aheadX + moving.Y * aheadY;
+        let change = ClampF(this.m_carrySpeed - speed, 0.0, 60.0 * elapsed) * vehicle.GetTotalMass();
+        if change > 0.0 {
+            this.Push(vehicle, vehicle.GetWorldPosition(), aheadX * change, aheadY * change, 0.0);
+        }
+        if now - this.m_carryLogged >= 0.1 {
+            this.m_carryLogged = now;
+            NightWheel_Event(s"landing: speed \(FloatToString(speed)), pushing \(FloatToString(change))");
+        }
     }
 
     // The height a ray hits in one collision group, or a very low value if it hits nothing.

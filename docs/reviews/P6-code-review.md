@@ -48,6 +48,15 @@ Log kept as `out/game-before/night-wheel-run29.log`. No new crash report appeare
 - **Boost limit works, per the log.** One burst held from 565.6 to 570.6 seconds on the log's clock ended by the time limit at 5.0 seconds. The next started 6.4 seconds later, and other bursts ended on release.
 - **Still not shown:** a wheel disconnect, with none logged, and a reload during flight, with no flight ended by a session change. Boost during flight and held buttons leave no clear log entry and haven't been reported.
 
+## Rest of the tests, 2026-11-06
+
+User report on 0.21.3: the remaining tests were run.
+
+- **Reload during flight:** the car is on the ground after loading, not flying. That is the intended result of finding 2, and the user accepts it.
+- **The wheel's switch fails.** Turning the switch at the top of the wheel off and on leaves no control of the wheel. No disconnect or connect was logged and the wheel kept its identity, so the plugin never learned of the change. Reports stopped, and the settings stayed marked connected.
+- **Likely cause, not proven:** Windows' notices aren't reaching the reader's window, or another registration in the game's process took over the wheel's input after the change. Only one window in a process can receive each kind of input.
+- **Fix in 0.21.4, untested:** once a second the reader checks that its registration is still its own and compares the devices Windows lists with those it knows, and it logs anything it had to correct. If the wheel just stops reporting with nothing else changed, this won't catch it, and the log will show that.
+
 ## To test in the game
 
 1. Unplug the wheel while holding boost, and while flying with the throttle down.

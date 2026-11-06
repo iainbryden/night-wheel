@@ -61,6 +61,7 @@ pub fn run(seconds: Option<u32>, plain: bool) -> Result<(), String> {
             Event::Report {
                 device, changes, ..
             } if plain => print_changes(device, changes),
+            Event::Notice(text) if plain => println!("notice: {text}"),
             Event::Tick(devices) => {
                 if !plain {
                     draw(devices);

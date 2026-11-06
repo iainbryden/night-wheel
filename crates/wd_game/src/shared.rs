@@ -28,6 +28,8 @@ static FOCUSED: AtomicBool = AtomicBool::new(false);
 static CONTEXT: AtomicU32 = AtomicU32::new(0);
 static CONTEXT_SEEN: AtomicU32 = AtomicU32::new(0);
 static HEARTBEAT_US: AtomicU64 = AtomicU64::new(0);
+/// Script updates since the last stats line. There is one each frame, so this is the frame rate.
+static FRAMES: AtomicU32 = AtomicU32::new(0);
 /// Marks an axis with no reading since the wheel last connected.
 const NO_READING: i32 = i32::MIN;
 static AXES: [AtomicI32; 3] = [const { AtomicI32::new(NO_READING) }; 3];
@@ -105,6 +107,7 @@ pub fn context_changed() {
 /// Called on the game's thread each frame, with whether the player is driving and the game has
 /// focus.
 pub fn set_driving(driving: bool, focused: bool) {
+    FRAMES.fetch_add(1, Ordering::Relaxed);
     let now = micros_since_start(Instant::now());
     let previous = HEARTBEAT_US.swap(now, Ordering::Relaxed);
     let gap = now.saturating_sub(previous) > drive::HEARTBEAT_LIMIT_US;
@@ -343,10 +346,11 @@ pub fn stats_line() -> Option<String> {
         return None;
     }
     Some(format!(
-        "stats paused={} driving={} connected={} reports={reports} applied={applied} fired={} {} {} {} {}",
+        "stats paused={} driving={} connected={} frames={} reports={reports} applied={applied} fired={} {} {} {} {}",
         PAUSED.load(Ordering::Relaxed),
         DRIVING.load(Ordering::Relaxed),
         WHEEL_CONNECTED.load(Ordering::Relaxed),
+        FRAMES.swap(0, Ordering::Relaxed),
         settings::fired_names(FIRED.swap(0, Ordering::Relaxed)),
         format_summary("decode", decode),
         format_summary("poll_interval", poll),

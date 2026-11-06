@@ -78,6 +78,9 @@ impl WheelReader {
                         }
                         log_file::send(format!("controller disconnected {}", device.label()));
                     }
+                    Event::Notice(text) => {
+                        log_file::send(format!("wheel reader: {text}"));
+                    }
                     Event::Tick(_) => {
                         if thread_stop.load(Ordering::Relaxed) {
                             return Flow::Stop;

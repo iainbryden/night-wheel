@@ -165,3 +165,11 @@ Approved by the user; files replaced and checksums verified. User report: landin
 - The push code ran on all 8 landings, carrying between about 8 and 20. Why the car still stops isn't known. The earlier flight tests also saw pushes under-deliver.
 - Two landings at about 69 carried only 20, because that car had no faster road speed recorded. So the cap is also too low in a car that has mostly flown.
 - Next time, try a stronger or repeated push over a few frames, or a game function that sets velocity directly if one exists, and look again at the cap.
+
+## Second try at keeping speed through a landing
+
+Version 0.21.4, not run in the game. `PhysicsWakeUp` compiles on a vehicle, and no function that sets velocity directly was found among 150 tries. The likely reason for the failed push is that the physics sleep while the car is teleported each frame, or that the push is lost to the last teleport. That isn't proven. For one second after landing, the script now wakes the physics and pushes the difference between the car's measured speed and the speed it flew at, by up to 60 m/s² each frame. The speed is capped at the fastest seen on the road, or 40 if that is higher. Braking ends it early, and the log records each step.
+
+## Frame rate in flight
+
+User report: the frame rate drops as soon as the car lifts off. The cause isn't known. Flight adds a teleport, a physics push and two 200 metre rays each frame, so the mod could be responsible as well as the game. The input poll rate stays at about 62 a second in flight, but it doesn't follow frames, so it says nothing either way. Version 0.21.4 logs frames per second on each stats line to measure this.

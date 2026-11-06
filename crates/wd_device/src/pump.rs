@@ -1,15 +1,15 @@
 //! Runs the Raw Input message loop and turns its messages into events.
 
 use crate::device::{Change, Device};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::{
-    GetRawInputData, GetRawInputDeviceList, HRAWINPUT, RAWHID, RAWINPUT, RAWINPUTDEVICE,
-    RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_INPUT, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIM_TYPEHID,
-    RegisterRawInputDevices,
+    GetRawInputData, GetRawInputDeviceList, GetRegisteredRawInputDevices, HRAWINPUT, RAWHID,
+    RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_INPUT, RIDEV_DEVNOTIFY,
+    RIDEV_INPUTSINK, RIM_TYPEHID, RegisterRawInputDevices,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_MESSAGE,
@@ -21,6 +21,9 @@ use windows::core::w;
 const GIDC_ARRIVAL: usize = 1;
 const GIDC_REMOVAL: usize = 2;
 const TIMER_ID: usize = 1;
+/// How often the loop checks devices itself, rather than relying only on Windows telling it.
+const CHECK_EVERY: Duration = Duration::from_secs(1);
+const CONTROLLER_USAGES: [u16; 3] = [0x04, 0x05, 0x08];
 
 /// Connected devices, keyed by their system handle.
 pub type Devices = BTreeMap<isize, Device>;
@@ -38,6 +41,8 @@ pub enum Event<'a> {
     },
     /// Fires at the rate given to [`run`], whether or not anything changed.
     Tick(&'a Devices),
+    /// Something unexpected was found and put right.
+    Notice(&'static str),
 }
 
 /// Whether the message loop should keep going.
@@ -129,6 +134,8 @@ fn message_loop(
 
     let mut buffer = vec![0u64; 512];
     let mut message = MSG::default();
+    let mut ignored = BTreeSet::new();
+    let mut next_check = Instant::now() + CHECK_EVERY;
     loop {
         // SAFETY: `message` is writable; a null filter window receives this thread's messages.
         let got = unsafe { GetMessageW(&mut message, None, 0, 0) };
@@ -143,6 +150,10 @@ fn message_loop(
                 handle_device_change(message.wParam, message.lParam, &mut devices, handler);
             }
             WM_TIMER => {
+                if Instant::now() >= next_check {
+                    next_check = Instant::now() + CHECK_EVERY;
+                    check_devices(window, &mut devices, &mut ignored, handler);
+                }
                 if handler(Event::Tick(&devices)) == Flow::Stop {
                     break;
                 }
@@ -156,6 +167,97 @@ fn message_loop(
     // SAFETY: the timer was started on this window above.
     let _ = unsafe { KillTimer(Some(window), TIMER_ID) };
     Ok(devices)
+}
+
+/// Handles of every HID device Windows lists now.
+fn listed_handles() -> Option<BTreeSet<isize>> {
+    let entry_size = size_of::<RAWINPUTDEVICELIST>() as u32;
+    let mut count = 0u32;
+    // SAFETY: a null list asks only for the device count.
+    if unsafe { GetRawInputDeviceList(None, &mut count, entry_size) } == u32::MAX {
+        return None;
+    }
+    let mut list = vec![RAWINPUTDEVICELIST::default(); count as usize];
+    // SAFETY: `list` holds `count` entries.
+    let found = unsafe { GetRawInputDeviceList(Some(list.as_mut_ptr()), &mut count, entry_size) };
+    if found == u32::MAX {
+        return None;
+    }
+    Some(
+        list.iter()
+            .take(found as usize)
+            .filter(|entry| entry.dwType == RIM_TYPEHID)
+            .map(|entry| entry.hDevice.0 as isize)
+            .collect(),
+    )
+}
+
+/// Whether each controller usage sends its input to `window`. Only one window in a process can
+/// receive each usage, so another registration in the process would silently end this one.
+fn registered_to(registered: &[RAWINPUTDEVICE], window: HWND) -> bool {
+    CONTROLLER_USAGES.iter().all(|usage| {
+        registered.iter().any(|entry| {
+            entry.usUsagePage == 0x01 && entry.usUsage == *usage && entry.hwndTarget == window
+        })
+    })
+}
+
+fn registration_is_ours(window: HWND) -> bool {
+    let mut registered = [RAWINPUTDEVICE::default(); 32];
+    let mut count = registered.len() as u32;
+    // SAFETY: `registered` holds `count` entries, and the size matches its element type.
+    let found = unsafe {
+        GetRegisteredRawInputDevices(
+            Some(registered.as_mut_ptr()),
+            &mut count,
+            size_of::<RAWINPUTDEVICE>() as u32,
+        )
+    };
+    // A failed check must not start a fight over the registration.
+    found == u32::MAX || registered_to(&registered[..found as usize], window)
+}
+
+/// Catches a wheel that left or returned without a notice reaching this window. A device gone from
+/// the list counts as removed, and a new one counts as arrived.
+fn check_devices(
+    window: HWND,
+    devices: &mut Devices,
+    ignored: &mut BTreeSet<isize>,
+    handler: &mut impl FnMut(Event<'_>) -> Flow,
+) {
+    if !registration_is_ours(window) && register_for_input(window).is_ok() {
+        handler(Event::Notice("input registration was lost and is restored"));
+    }
+    let Some(handles) = listed_handles() else {
+        return;
+    };
+    ignored.retain(|handle| handles.contains(handle));
+    let gone: Vec<isize> = devices
+        .keys()
+        .filter(|handle| !handles.contains(handle))
+        .copied()
+        .collect();
+    for handle in gone {
+        if let Some(device) = devices.remove(&handle) {
+            handler(Event::Notice("a device left without a notice"));
+            handler(Event::Disconnected(&device));
+        }
+    }
+    for handle in handles {
+        if devices.contains_key(&handle) || ignored.contains(&handle) {
+            continue;
+        }
+        match Device::open(HANDLE(handle as *mut _)) {
+            Ok(Some(device)) => {
+                handler(Event::Notice("a device arrived without a notice"));
+                handler(Event::Connected(&device));
+                devices.insert(handle, device);
+            }
+            Ok(None) | Err(_) => {
+                ignored.insert(handle);
+            }
+        }
+    }
 }
 
 fn handle_input(
@@ -311,7 +413,7 @@ fn create_window() -> Result<HWND, String> {
 
 fn register_for_input(window: HWND) -> Result<(), String> {
     let flags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-    let requests = [0x04u16, 0x05, 0x08].map(|usage| RAWINPUTDEVICE {
+    let requests = CONTROLLER_USAGES.map(|usage| RAWINPUTDEVICE {
         usUsagePage: 0x01,
         usUsage: usage,
         dwFlags: flags,
@@ -320,4 +422,29 @@ fn register_for_input(window: HWND) -> Result<(), String> {
     // SAFETY: `requests` is valid for the call, and the size matches its element type.
     unsafe { RegisterRawInputDevices(&requests, size_of::<RAWINPUTDEVICE>() as u32) }
         .map_err(|error| format!("could not register for input: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(usage: u16, window: isize) -> RAWINPUTDEVICE {
+        RAWINPUTDEVICE {
+            usUsagePage: 0x01,
+            usUsage: usage,
+            dwFlags: Default::default(),
+            hwndTarget: HWND(window as *mut _),
+        }
+    }
+
+    #[test]
+    fn registration_needs_every_usage_on_this_window() {
+        let ours = HWND(std::ptr::without_provenance_mut(1));
+        let all = [entry(0x04, 1), entry(0x05, 1), entry(0x08, 1)];
+        assert!(registered_to(&all, ours));
+        assert!(!registered_to(&all[..2], ours), "one is missing");
+        let taken = [entry(0x04, 1), entry(0x05, 2), entry(0x08, 1)];
+        assert!(!registered_to(&taken, ours), "another window took one");
+        assert!(!registered_to(&[], ours));
+    }
 }
