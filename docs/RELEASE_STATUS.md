@@ -32,6 +32,7 @@ Date: 2026-11-05. Version 0.21.2, on branch `main`. See [the code review](review
 - **Whether the map fix worked** was never reported. The wheel is gated in menus because it was making the map toggle between gamepad and keyboard.
 - **Flight has no check for buildings ahead**, and speed doesn't carry over when it ends, so the car stops abruptly. Over ground the rays can't see, Descend can't end flight; leaving the car does. All its strengths are provisional.
 - **The wheel can change mode.** It once re-appeared as `PID_C260` and couldn't be read until G HUB was opened. The trigger is unknown.
+- **The steering depends on G HUB's values.** After a G HUB update to version 2026.7 on 2026-11-05, G HUB showed sensitivity 100 and range 350 for the Cyberpunk profile, and the wheel needed much more turning. Setting 24 and 240 fixed it, per user report. Whether the update reset them isn't known. D21 says the mod must not require particular G HUB values, and today it depends on them matching the calibration, so players need to be told, or the mod needs to handle it.
 - **Buttons 13 to 19** on the wheel were never identified.
 
 ## What blocks a release
