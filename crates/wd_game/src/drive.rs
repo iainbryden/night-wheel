@@ -135,10 +135,17 @@ pub fn route_flags(controls: u64, pairs: impl Iterator<Item = (u64, u32)>) -> u3
     })
 }
 
-/// The same stick and triggers also walk and fire on foot, so the wheel only applies while
-/// the player is driving, the game is not paused, and the script's updates are still fresh.
-pub fn may_apply(connected: bool, driving: bool, paused: bool, heartbeat_age_us: u64) -> bool {
-    connected && driving && !paused && heartbeat_age_us <= HEARTBEAT_LIMIT_US
+/// The same stick and triggers also walk and fire on foot, so the wheel only applies while the
+/// player is driving, the game has focus and is not paused, and the script's updates are fresh.
+/// Focus is checked here because the reader has to receive input in the background.
+pub fn may_apply(
+    connected: bool,
+    driving: bool,
+    focused: bool,
+    paused: bool,
+    heartbeat_age_us: u64,
+) -> bool {
+    connected && driving && focused && !paused && heartbeat_age_us <= HEARTBEAT_LIMIT_US
 }
 
 /// Uses the wheel's value for each control unless it is at rest, so a real gamepad still works.
@@ -340,20 +347,33 @@ mod tests {
 
     #[test]
     fn wheel_only_applies_while_driving() {
-        assert!(may_apply(true, true, false, 0));
-        assert!(!may_apply(true, false, false, 0));
+        assert!(may_apply(true, true, true, false, 0));
+        assert!(!may_apply(true, false, true, false, 0));
+    }
+
+    #[test]
+    fn losing_focus_stops_the_wheel() {
+        assert!(!may_apply(true, true, false, false, 0));
+    }
+
+    #[test]
+    fn a_press_made_while_closed_never_counts_when_it_opens() {
+        // The poll that sees a context change is closed, however the press arrived.
+        let (counted, waiting) = gate_controls(0b1, 0b1, 0, false);
+        assert_eq!(counted, 0);
+        assert_eq!(gate_controls(0b1, 0, waiting, true).0, 0);
     }
 
     #[test]
     fn pause_and_disconnect_stop_the_wheel() {
-        assert!(!may_apply(true, true, true, 0));
-        assert!(!may_apply(false, true, false, 0));
+        assert!(!may_apply(true, true, true, true, 0));
+        assert!(!may_apply(false, true, true, false, 0));
     }
 
     #[test]
     fn a_stale_script_stops_the_wheel() {
-        assert!(may_apply(true, true, false, HEARTBEAT_LIMIT_US));
-        assert!(!may_apply(true, true, false, HEARTBEAT_LIMIT_US + 1));
+        assert!(may_apply(true, true, true, false, HEARTBEAT_LIMIT_US));
+        assert!(!may_apply(true, true, true, false, HEARTBEAT_LIMIT_US + 1));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Release status
 
-Date: 2026-11-05. Version 0.21.0, on branch `main`.
+Date: 2026-11-05. Version 0.21.1, on branch `main`. See [the code review](reviews/P6-code-review.md) for fixes awaiting a game test.
 
 **Night Wheel isn't ready for release.** The code is ready for review. It is missing features the product requirements call for, and most of the required lifecycle tests have no recorded result. A public preview would need a decision to reduce the requirements for that preview.
 
@@ -48,6 +48,9 @@ Release requirements:
 8. Include the full license texts for bundled Rust libraries. `THIRD_PARTY_NOTICES.md` lists them but doesn't contain the texts.
 9. Check the name on Nexus Mods and for trademarks, and review the platform's publishing policy at release time.
 10. Test the package on a clean install.
+11. Make the settings page say why the wheel isn't working: no calibration, disconnected, unsupported mode or failed hook.
+12. Move steering speed from its text file to the settings.
+13. Test the settings page at 16:9, ultrawide and other UI scales.
 
 ## Review notes
 

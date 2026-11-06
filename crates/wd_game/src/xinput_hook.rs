@@ -11,6 +11,7 @@ use windows::Win32::UI::Input::XboxController::{
     XINPUT_CAPABILITIES, XINPUT_DEVSUBTYPE_GAMEPAD, XINPUT_DEVTYPE_GAMEPAD,
     XINPUT_GAMEPAD_BUTTON_FLAGS, XINPUT_STATE,
 };
+use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use windows::core::{s, w};
 
 const ERROR_SUCCESS: u32 = 0;
@@ -130,6 +131,18 @@ unsafe extern "C" fn get_capabilities_detour(
     capabilities.Gamepad.sThumbRX = -1;
     capabilities.Gamepad.sThumbRY = -1;
     ERROR_SUCCESS
+}
+
+/// Whether the window in front belongs to this process. Called once a frame from the script, so it
+/// adds nothing to the path between a wheel report and the game's poll.
+pub fn game_has_focus() -> bool {
+    let mut process = 0;
+    // SAFETY: neither call has requirements, and `process` is writable for the call. With no
+    // window in front, `process` stays 0, which is never this process.
+    unsafe {
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut process));
+    }
+    process == std::process::id()
 }
 
 /// Attaches the hooks. Without them the game simply keeps its normal input.

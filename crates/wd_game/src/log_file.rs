@@ -14,6 +14,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use wd_core::config;
 
 const SUMMARY_EVERY: Duration = Duration::from_secs(1);
+/// The longest the thread sleeps before noticing a stop request.
+const STOP_CHECK: Duration = Duration::from_millis(100);
 const STOP_WAIT: Duration = Duration::from_millis(1500);
 const STOP_POLL: Duration = Duration::from_millis(20);
 const MAX_LOG_BYTES: u64 = 20 * 1024 * 1024;
@@ -84,18 +86,20 @@ impl Logger {
             let mut file = open();
             let mut written = 0;
             let mut next = Instant::now() + SUMMARY_EVERY;
-            loop {
-                let wait = next.saturating_duration_since(Instant::now());
+            while !stop.load(Ordering::Relaxed) {
+                let wait = next
+                    .saturating_duration_since(Instant::now())
+                    .min(STOP_CHECK);
                 match receiver.recv_timeout(wait) {
                     Ok(message) => write_line(&mut file, &mut written, &message),
                     Err(RecvTimeoutError::Timeout) => {
+                        if Instant::now() < next {
+                            continue;
+                        }
                         if let Some(line) = shared::stats_line() {
                             write_line(&mut file, &mut written, &line);
                         }
                         next = Instant::now() + SUMMARY_EVERY;
-                        if stop.load(Ordering::Relaxed) {
-                            break;
-                        }
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
                 }
@@ -108,15 +112,18 @@ impl Logger {
     }
 
     /// Asks the thread to stop and waits briefly. It never blocks game shutdown indefinitely.
-    pub fn stop(self) {
+    /// Returns whether the thread has ended.
+    pub fn stop(self) -> bool {
         self.stop.store(true, Ordering::Relaxed);
         let started = Instant::now();
         while !self.thread.is_finished() && started.elapsed() < STOP_WAIT {
             std::thread::sleep(STOP_POLL);
         }
-        if self.thread.is_finished() {
+        let finished = self.thread.is_finished();
+        if finished {
             let _ = self.thread.join();
         }
+        finished
     }
 }
 

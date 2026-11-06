@@ -22,6 +22,11 @@ pub static WHEEL_CONNECTED: AtomicBool = AtomicBool::new(false);
 /// Validated settings, when a usable file exists. Without them the wheel never drives.
 pub static PROFILE: OnceLock<Config> = OnceLock::new();
 static DRIVING: AtomicBool = AtomicBool::new(false);
+static FOCUSED: AtomicBool = AtomicBool::new(false);
+/// Counts changes of context: pause, focus, driving, connection, or a gap in the game's updates.
+/// A press made before a change must never act after it, even if no poll saw the gate closed.
+static CONTEXT: AtomicU32 = AtomicU32::new(0);
+static CONTEXT_SEEN: AtomicU32 = AtomicU32::new(0);
 static HEARTBEAT_US: AtomicU64 = AtomicU64::new(0);
 /// Marks an axis with no reading since the wheel last connected.
 const NO_READING: i32 = i32::MIN;
@@ -91,10 +96,23 @@ pub fn record_report(axes: [Option<i64>; 3], buttons: u64, hat: Option<i64>, rec
     DECODE.record(now.saturating_duration_since(received).as_micros() as u64);
 }
 
-/// Called on the game's thread each frame, with whether the player is driving.
-pub fn set_driving(driving: bool) {
-    DRIVING.store(driving, Ordering::Relaxed);
-    HEARTBEAT_US.store(micros_since_start(Instant::now()), Ordering::Relaxed);
+/// Called when the wheel's context changes. Forgets functions waiting for the script.
+pub fn context_changed() {
+    CONTEXT.fetch_add(1, Ordering::Relaxed);
+    SCRIPT_PENDING.store(0, Ordering::Relaxed);
+}
+
+/// Called on the game's thread each frame, with whether the player is driving and the game has
+/// focus.
+pub fn set_driving(driving: bool, focused: bool) {
+    let now = micros_since_start(Instant::now());
+    let previous = HEARTBEAT_US.swap(now, Ordering::Relaxed);
+    let gap = now.saturating_sub(previous) > drive::HEARTBEAT_LIMIT_US;
+    let was_driving = DRIVING.swap(driving, Ordering::Relaxed);
+    let was_focused = FOCUSED.swap(focused, Ordering::Relaxed);
+    if gap || was_driving != driving || was_focused != focused {
+        context_changed();
+    }
 }
 
 /// The latest raw steering, throttle and brake readings, where there are any.
@@ -105,14 +123,26 @@ pub fn raw_axes() -> [Option<i32>; 3] {
     })
 }
 
-/// Forgets old readings when the wheel leaves, so they can't apply after it returns.
-pub fn clear_axes() {
+/// Called when the wheel appears. Anything already held must be released before it counts.
+pub fn wheel_connected() {
+    WHEEL_CONNECTED.store(true, Ordering::Relaxed);
+    context_changed();
+}
+
+/// Called when the wheel leaves or can no longer be read. Forgets everything that came from it, so
+/// nothing stays pressed and old readings can't apply after it returns.
+pub fn wheel_lost() {
+    WHEEL_CONNECTED.store(false, Ordering::Relaxed);
     for axis in &AXES {
         axis.store(NO_READING, Ordering::Relaxed);
     }
     CONTROLS.store(0, Ordering::Relaxed);
     PRESSED_FOR_POLL.store(0, Ordering::Relaxed);
     PRESSED_FOR_SCREEN.store(0, Ordering::Relaxed);
+    BOOST_HELD.store(false, Ordering::Relaxed);
+    SCRIPT_HELD.store(0, Ordering::Relaxed);
+    set_pedals(0, 0);
+    context_changed();
 }
 
 /// Whether the wheel may control the game at this moment.
@@ -121,6 +151,7 @@ pub fn wheel_may_apply() -> bool {
     drive::may_apply(
         WHEEL_CONNECTED.load(Ordering::Relaxed),
         DRIVING.load(Ordering::Relaxed),
+        FOCUSED.load(Ordering::Relaxed),
         PAUSED.load(Ordering::Relaxed),
         now.saturating_sub(HEARTBEAT_US.load(Ordering::Relaxed)),
     )
@@ -131,7 +162,11 @@ pub fn record_poll() {
     let now = micros_since_start(Instant::now());
     let previous = LAST_POLL_US.swap(now, Ordering::Relaxed);
     if previous != NEVER {
-        POLL_INTERVAL.record(now.saturating_sub(previous));
+        let interval = now.saturating_sub(previous);
+        POLL_INTERVAL.record(interval);
+        if interval > drive::HEARTBEAT_LIMIT_US {
+            context_changed();
+        }
     }
     let reported = LAST_REPORT_US.load(Ordering::Relaxed);
     if reported != NEVER {
@@ -164,7 +199,9 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
     let held = CONTROLS.load(Ordering::Relaxed);
     let pressed = PRESSED_FOR_POLL.swap(0, Ordering::Relaxed);
     let waiting = WAITING.load(Ordering::Relaxed);
-    let (counted, waiting) = drive::gate_controls(held, pressed, waiting, may_apply);
+    let context = CONTEXT.load(Ordering::Relaxed);
+    let changed = CONTEXT_SEEN.swap(context, Ordering::Relaxed) != context;
+    let (counted, waiting) = drive::gate_controls(held, pressed, waiting, may_apply && !changed);
     WAITING.store(waiting, Ordering::Relaxed);
     let routes = |controls| {
         drive::route_flags(
@@ -191,13 +228,28 @@ pub fn pad_buttons(may_apply: bool) -> u16 {
     (flags & 0xFFFF) as u16
 }
 
+/// Whether what the last poll published still holds. The script reads it between polls, so it is
+/// checked again here: the wheel may have left, or the game may have stopped polling.
+fn script_inputs_live() -> bool {
+    let polled = LAST_POLL_US.load(Ordering::Relaxed);
+    wheel_may_apply()
+        && polled != NEVER
+        && micros_since_start(Instant::now()).saturating_sub(polled) <= drive::HEARTBEAT_LIMIT_US
+}
+
 /// Whether boost should push the car now. Touching the brake ends it.
 pub fn boost_wanted() -> bool {
-    BOOST_HELD.load(Ordering::Relaxed) && BRAKE_CLEAR.load(Ordering::Relaxed)
+    script_inputs_live()
+        && BOOST_HELD.load(Ordering::Relaxed)
+        && BRAKE_CLEAR.load(Ordering::Relaxed)
 }
 
 pub fn script_held() -> i32 {
-    SCRIPT_HELD.load(Ordering::Relaxed) as i32
+    if script_inputs_live() {
+        SCRIPT_HELD.load(Ordering::Relaxed) as i32
+    } else {
+        0
+    }
 }
 
 pub fn set_pedals(throttle: u8, brake: u8) {
@@ -207,7 +259,11 @@ pub fn set_pedals(throttle: u8, brake: u8) {
 
 /// Throttle, then brake, from 0 to 1.
 pub fn pedal(index: usize) -> f32 {
-    PEDALS[index].load(Ordering::Relaxed) as f32 / 255.0
+    if script_inputs_live() {
+        PEDALS[index].load(Ordering::Relaxed) as f32 / 255.0
+    } else {
+        0.0
+    }
 }
 
 pub fn set_brake_clear(clear: bool) {
@@ -295,8 +351,54 @@ pub fn stats_line() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::format_summary;
+    use super::*;
     use crate::latency::Summary;
+
+    /// One test, because these share process-wide state.
+    #[test]
+    fn nothing_from_the_wheel_outlasts_it() {
+        wheel_connected();
+        set_driving(true, true);
+        record_poll();
+        BOOST_HELD.store(true, Ordering::Relaxed);
+        SCRIPT_HELD.store(128, Ordering::Relaxed);
+        SCRIPT_PENDING.store(1, Ordering::Relaxed);
+        set_pedals(255, 0);
+        assert!(boost_wanted());
+        assert_eq!(script_held(), 128);
+        assert_eq!(pedal(0), 1.0);
+
+        // Losing focus hides it without clearing it.
+        set_driving(true, false);
+        assert!(!boost_wanted());
+        assert_eq!(script_held(), 0);
+        assert_eq!(pedal(0), 0.0);
+        assert_eq!(take_script_actions(), 0);
+
+        set_driving(true, true);
+        wheel_lost();
+        assert!(!WHEEL_CONNECTED.load(Ordering::Relaxed));
+        assert_eq!(raw_axes(), [None, None, None]);
+        assert!(!BOOST_HELD.load(Ordering::Relaxed));
+        assert_eq!(SCRIPT_HELD.load(Ordering::Relaxed), 0);
+        assert_eq!(PEDALS[0].load(Ordering::Relaxed), 0);
+
+        // A press waiting when the context changes never acts.
+        wheel_connected();
+        set_driving(true, true);
+        record_poll();
+        CONTROLS.store(0b1, Ordering::Relaxed);
+        PRESSED_FOR_POLL.store(0b1, Ordering::Relaxed);
+        ROW_BITS[0].store(0b1, Ordering::Relaxed);
+        assert_eq!(pad_buttons(true), 0);
+        assert_eq!(pad_buttons(true), 0, "still held, so it needs a release");
+        CONTROLS.store(0, Ordering::Relaxed);
+        assert_eq!(pad_buttons(true), 0);
+        CONTROLS.store(0b1, Ordering::Relaxed);
+        assert_ne!(pad_buttons(true), 0, "a fresh press counts");
+        ROW_BITS[0].store(0, Ordering::Relaxed);
+        CONTROLS.store(0, Ordering::Relaxed);
+    }
 
     #[test]
     fn a_summary_lists_all_its_numbers() {

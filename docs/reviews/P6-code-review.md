@@ -1,0 +1,34 @@
+# Code review of 0.21.0
+
+Date: 2026-11-05. The user supplied a review of version 0.21.0 from source inspection. The reviewer didn't run the game, compile the script against it or use a G29. It concerns this project's own code and contains no outside code. Each finding was checked against the source here before any change.
+
+Nothing was posted to GitHub.
+
+The fixes are in version 0.21.1. They have passed automated tests and an offline script compile, and **none has been tried in the game or on the wheel**.
+
+## Findings
+
+| # | Finding | Check | Fix |
+|---|---|---|---|
+| 1 | Unplugging the wheel can leave boost or pedals applied | Confirmed. Also, if the reader thread failed, the wheel stayed marked connected and its last readings kept applying | Losing the wheel, or the reader ending for any reason, clears everything that came from it. The script's reads of boost, held controls and pedals are checked again when read, including that the game is still polling |
+| 2 | Flight state can carry across a reload or vehicle change | Confirmed | Session start and end clear boost, flight and Autodrive state. Flight is tied to one vehicle and ends if the vehicle changes |
+| 3 | A press during pause or loading can apply on the first eligible poll, and there is no focus check | Confirmed. `RIDEV_INPUTSINK` itself has to stay, because the reader's message-only window is never in front | The gate now includes focus, read once a frame so the input path doesn't change. Any change of pause, focus, driving or connection, or a gap in polls or script updates, closes one poll, requires held controls to be released and forgets waiting radio actions |
+| 4 | Unload can return while worker threads still run | Confirmed | The log thread now notices a stop request within 100 ms. If a thread still hasn't ended after its wait, the library stays loaded until the process ends. This was chosen over an unlimited wait, which could hang the game's shutdown |
+| 5 | Boost can do nothing on the first press after a crawl | Confirmed | The speed limit is now based on at least 20 in the game's speed units, a provisional value. Above that speed, behaviour doesn't change |
+
+## Not changed
+
+- **Boost duration limit and cooldown:** still required for release. Their values change how boost feels, so they need the user's choice.
+- **Flight after losing the wheel:** the car stays in the air and coasts, because Descend comes from the wheel. Leaving the car ends flight.
+- **Status messages:** the settings page still doesn't separate a disconnected wheel, an unsupported wheel mode or a failed hook.
+- **Steering speed:** still set in a text file.
+- **Settings page:** Esc, and the layout at ultrawide and other UI scales, are untested.
+- **Build:** the reviewer's workspace build stopped when RED4ext's CMake step tried to write into a read-only Cargo cache. That hasn't happened here, and it wasn't reproduced.
+
+## To test in the game
+
+1. Unplug the wheel while holding boost, and while flying with the throttle down.
+2. Reload a save while flying, and leave a car while flying and enter another.
+3. Hold a bound button through a pause, a load and Alt-Tab. It must not act until released and pressed again.
+4. Press boost from a crawl in a car just entered.
+5. Quit to desktop, and check for a clean shutdown in the log.

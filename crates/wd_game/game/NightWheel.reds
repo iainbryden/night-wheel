@@ -143,6 +143,7 @@ public class NightWheelService extends ScriptableService {
     private let m_inMenu: Bool;
     private let m_turn: Float;
     private let m_flying: Bool;
+    private let m_flightVehicle: EntityID;
     private let m_flightStart: Float;
     private let m_flightTarget: Float;
     private let m_flightLastTime: Float;
@@ -184,6 +185,7 @@ public class NightWheelService extends ScriptableService {
 
     private cb func OnSessionReady(event: ref<GameSessionEvent>) {
         NightWheel_Event("session-ready");
+        this.ResetVehicleState("session start");
         if !this.m_active {
             this.m_active = true;
             this.ScheduleTick();
@@ -207,9 +209,22 @@ public class NightWheelService extends ScriptableService {
         this.m_paused = false;
         this.m_driving = false;
         this.m_listening = null;
+        this.ResetVehicleState("session end");
         NightWheel_SetDriving(false);
         NightWheel_Event("session-end");
         this.HideAll();
+    }
+
+    // Boost, flight and Autodrive belong to one session. Flight's saved position must never move a
+    // car in the next one.
+    private func ResetVehicleState(reason: String) {
+        this.EndBoost(reason);
+        this.EndFlight(reason);
+        this.m_flightClimbHeld = false;
+        if this.m_autopilot {
+            this.m_autopilot = false;
+            NightWheel_SetAutopilot(false);
+        }
     }
 
     // Keys only matter while the settings page is open.
@@ -341,7 +356,9 @@ public class NightWheelService extends ScriptableService {
         if !this.m_boosting {
             this.m_boosting = true;
             this.m_boostPeak = speed;
-            this.m_boostLimit = MaxF(this.m_topSeen, speed) * (1.0 + percent / 100.0);
+            // With no fast speed seen yet, a press at a crawl still needs room to accelerate.
+            let reference = MaxF(MaxF(this.m_topSeen, speed), 20.0);
+            this.m_boostLimit = reference * (1.0 + percent / 100.0);
             NightWheel_Event(s"boost: on at \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
         }
         if speed > this.m_boostPeak {
@@ -371,6 +388,10 @@ public class NightWheelService extends ScriptableService {
         let vehicle = GetMountedVehicle(player);
         if !IsDefined(vehicle) {
             return;
+        }
+        // Flight's position belongs to one car.
+        if this.m_flying && NotEquals(vehicle.GetEntityID(), this.m_flightVehicle) {
+            this.EndFlight("vehicle changed");
         }
         let game = GetGameInstance();
         // A fresh press of Climb starts flight when it is off.
@@ -500,6 +521,7 @@ public class NightWheelService extends ScriptableService {
         let begin = vehicle.GetWorldPosition();
         let moving = vehicle.GetLinearVelocity();
         this.m_flying = true;
+        this.m_flightVehicle = vehicle.GetEntityID();
         this.m_flightStart = begin.Z;
         this.m_flightTarget = begin.Z + 3.0;
         this.m_flightX = begin.X;

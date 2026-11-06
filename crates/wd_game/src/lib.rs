@@ -20,6 +20,11 @@ use red4ext_rs::{
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 use wd_core::config::{self, Config};
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::System::LibraryLoader::{
+    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_PIN, GetModuleHandleExW,
+};
+use windows::core::PCWSTR;
 
 static LOGGER_STOP: AtomicBool = AtomicBool::new(false);
 static THREADS: Mutex<Option<(wheel::WheelReader, log_file::Logger)>> = Mutex::new(None);
@@ -29,7 +34,7 @@ static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
 const VERSION_MAJOR: u8 = 0;
 const VERSION_MINOR: u16 = 21;
-const VERSION_PATCH: u32 = 0;
+const VERSION_PATCH: u32 = 1;
 
 struct NightWheel;
 
@@ -102,10 +107,29 @@ impl Plugin for NightWheel {
             .unwrap_or_else(PoisonError::into_inner)
             .take();
         if let Some((reader, logger)) = threads {
-            reader.stop();
-            logger.stop();
+            let reader_ended = reader.stop();
+            let logger_ended = logger.stop();
+            if !(reader_ended && logger_ended) {
+                keep_library_loaded();
+            }
         }
     }
+}
+
+/// A thread that outlives its wait would crash if this library were unmapped under it, so the
+/// library stays loaded until the process ends. Waiting forever could hang the game's shutdown.
+fn keep_library_loaded() {
+    let address = keep_library_loaded as *const () as *const u16;
+    let mut module = HMODULE::default();
+    // SAFETY: the flags make Windows read `address` as a location in this library, not as text,
+    // and `module` is writable for the call.
+    let _ = unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+            PCWSTR(address),
+            &mut module,
+        )
+    };
 }
 
 export_plugin_symbols!(NightWheel);
@@ -339,7 +363,7 @@ fn screen_hints() -> String {
 }
 
 fn set_driving(driving: bool) {
-    shared::set_driving(driving);
+    shared::set_driving(driving, xinput_hook::game_has_focus());
 }
 
 fn steering_action(_value: f32) {
@@ -348,7 +372,9 @@ fn steering_action(_value: f32) {
 
 fn event(name: String) {
     let paused = pause_after(&name, shared::PAUSED.load(Ordering::Relaxed));
-    shared::PAUSED.store(paused, Ordering::Relaxed);
+    if shared::PAUSED.swap(paused, Ordering::Relaxed) != paused {
+        shared::context_changed();
+    }
     log_file::send(format!("script event {name} paused={paused}"));
 }
 

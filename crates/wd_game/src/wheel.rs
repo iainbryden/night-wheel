@@ -68,14 +68,13 @@ impl WheelReader {
                     }
                     Event::Connected(device) => {
                         if device.is_observed_target() {
-                            shared::WHEEL_CONNECTED.store(true, Ordering::Relaxed);
+                            shared::wheel_connected();
                         }
                         log_file::send(format!("controller connected {}", device.label()));
                     }
                     Event::Disconnected(device) => {
                         if device.is_observed_target() {
-                            shared::WHEEL_CONNECTED.store(false, Ordering::Relaxed);
-                            shared::clear_axes();
+                            shared::wheel_lost();
                         }
                         log_file::send(format!("controller disconnected {}", device.label()));
                     }
@@ -87,6 +86,8 @@ impl WheelReader {
                 }
                 Flow::Continue
             });
+            // Whatever ended the reading, nothing may keep applying its last values.
+            shared::wheel_lost();
             if let Err(problem) = result {
                 log_file::send(format!("wheel reading stopped: {problem}"));
             }
@@ -95,7 +96,8 @@ impl WheelReader {
     }
 
     /// Asks the thread to stop and waits briefly. It never blocks game shutdown indefinitely.
-    pub fn stop(self) {
+    /// Returns whether the thread has ended.
+    pub fn stop(self) -> bool {
         self.stop.store(true, Ordering::Relaxed);
         let started = Instant::now();
         while !self.thread.is_finished() && started.elapsed() < STOP_WAIT {
@@ -103,8 +105,10 @@ impl WheelReader {
         }
         if self.thread.is_finished() {
             let _ = self.thread.join();
+            true
         } else {
             log_file::send("wheel thread did not stop in time".to_owned());
+            false
         }
     }
 }
