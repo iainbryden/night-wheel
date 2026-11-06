@@ -41,6 +41,13 @@ Approved by the user; files replaced and checksums verified. User report: "All g
 - **Boost:** four bursts, each ending within about 0.3 seconds as released, and the time limit never triggered. Those would be short taps, which the user hasn't confirmed. The same route carried Climb and Descend held for many seconds, so a cut-out is unlikely but not excluded.
 - **Not shown by the logs:** a 5 second hold, a wheel disconnect and a reload during flight. Tests 1, 2, 5 and 6 below can't be counted as passed from these runs. Test 3 leaves no log entry.
 
+## Run of 0.21.3, 2026-11-05
+
+Log kept as `out/game-before/night-wheel-run29.log`. No new crash report appeared, and the run reached a clean plugin unload.
+
+- **Boost limit works, per the log.** One burst held from 565.6 to 570.6 seconds on the log's clock ended by the time limit at 5.0 seconds. The next started 6.4 seconds later, and other bursts ended on release.
+- **Still not shown:** a wheel disconnect, with none logged, and a reload during flight, with no flight ended by a session change. Boost during flight and held buttons leave no clear log entry and haven't been reported.
+
 ## To test in the game
 
 1. Unplug the wheel while holding boost, and while flying with the throttle down.

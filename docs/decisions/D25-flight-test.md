@@ -157,3 +157,11 @@ Version 0.21.0, not run in the game. The flight mode button is removed, as agree
 ## Keeping speed through a landing
 
 Requested by the user. Version 0.21.3, not run in the game. Ending flight by holding Descend at the ground now gives the car one push along its heading. The push hands over its forward speed, capped at the fastest speed seen on the road, or 20 in the game's speed units if that is higher. Sideways and vertical motion aren't carried. Physics pushes under-delivered in the early flight tests, so the car may keep only part of its speed, and the log records the speed at landing and the amount carried.
+
+### Run, 2026-11-05
+
+Approved by the user; files replaced and checksums verified. User report: landing still stops the car. **This doesn't work yet**, and the user chose to leave it for next time. Log kept as `out/game-before/night-wheel-run29.log`.
+
+- The push code ran on all 8 landings, carrying between about 8 and 20. Why the car still stops isn't known. The earlier flight tests also saw pushes under-deliver.
+- Two landings at about 69 carried only 20, because that car had no faster road speed recorded. So the cap is also too low in a car that has mostly flown.
+- Next time, try a stronger or repeated push over a few frames, or a game function that sets velocity directly if one exists, and look again at the cap.

@@ -12,7 +12,7 @@ Date: 2026-11-05. Version 0.21.3, on branch `main`. See [the code review](review
 |---|---|---|
 | Steering and pedals | Works | User report; `docs/decisions/D20-steering-rate-test.md` |
 | One-press binding on an in-game page | Works | User report; `docs/decisions/D22-settings-page-input.md` |
-| Boost | Works. The 5 second limit and 3 second cooldown are provisional and untested | User report before the limit; `docs/decisions/D23-boost-test.md` |
+| Boost | Works. The 5 second limit ran as designed per the log. The limit and the 3 second cooldown are provisional | User report before the limit; `docs/decisions/D23-boost-test.md` |
 | Flight with Climb and Descend | Works, and passes through buildings | User report; `docs/decisions/D25-flight-test.md` |
 | Vehicle function bindings | Mostly work | User report; horn only worked once per car entry |
 | Radio controls | Work | User report |
@@ -30,7 +30,7 @@ Date: 2026-11-05. Version 0.21.3, on branch `main`. See [the code review](review
 
 - **Esc closes the whole pause menu** from the settings page. Period goes back. A fix was tried, and its result was never reported.
 - **Whether the map fix worked** was never reported. The wheel is gated in menus because it was making the map toggle between gamepad and keyboard.
-- **Flight has no check for buildings ahead**. Landing with Descend hands over forward speed, untested in the game, and any other end to flight doesn't. Over ground the rays can't see, Descend can't end flight; leaving the car does. All its strengths are provisional.
+- **Flight has no check for buildings ahead**. The car still stops when it lands: a push meant to carry its speed runs, but it doesn't work yet. Over ground the rays can't see, Descend can't end flight; leaving the car does. All its strengths are provisional.
 - **The wheel can change mode.** It once re-appeared as `PID_C260` and couldn't be read until G HUB was opened. The trigger is unknown.
 - **The steering depends on G HUB's values.** After a G HUB update to version 2026.7 on 2026-11-05, G HUB showed sensitivity 100 and range 350 for the Cyberpunk profile, and the wheel needed much more turning. Setting 24 and 240 fixed it, per user report. Whether the update reset them isn't known. D21 says the mod must not require particular G HUB values, and today it depends on them matching the calibration, so players need to be told, or the mod needs to handle it.
 - **Buttons 13 to 19** on the wheel were never identified.
