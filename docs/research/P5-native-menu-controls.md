@@ -26,7 +26,7 @@ Whether spawned widgets draw correctly on the page at `inkMenuLayer`, and whethe
 
 ## Steering sliders
 
-Version 0.22.0, user report: "works well." The saved values are range 360, center response 1.0 and speed x2. The slider buttons work and saved each change, per the log. Which G HUB values were in use isn't confirmed yet, and the defaults stay neutral until it is.
+Version 0.22.0, user report: "works well." The saved values are range 360, center response 1.0 and speed x2. The slider buttons work and saved each change, per the log. G HUB was at sensitivity 50 and range 900, by a later screenshot, and these are now the defaults.
 
 ## WolvenKit read, 2026-11-06
 
