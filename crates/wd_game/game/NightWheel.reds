@@ -182,12 +182,11 @@ public class NightWheelService extends ScriptableService {
     private let m_topSeen: Float;
     private let m_boostVehicle: EntityID;
     private let m_lastBoostTime: Float;
-    private let m_boostValue: ref<inkText>;
-    private let m_boostFill: ref<inkRectangle>;
     private let m_sliderValues: array<ref<inkText>>;
     private let m_sliderFills: array<ref<inkRectangle>>;
     private let m_sliderControls: array<ref<inkSliderController>>;
     private let m_sliderShown: array<Float>;
+    private let m_sliderTrackW: array<Float>;
     private let m_menuController: wref<inkGameController>;
 
     public static func EntryLabel() -> String {
@@ -868,107 +867,63 @@ public class NightWheelService extends ScriptableService {
 
         let back = new inkRectangle();
         back.SetAnchor(inkEAnchor.Fill);
-        back.SetTintColor(new HDRColor(0.03, 0.01, 0.02, 1.0));
+        back.SetTintColor(new HDRColor(0.05, 0.015, 0.025, 1.0));
         back.Reparent(page);
 
+        // Two columns, each as wide as a row of the game's own settings menu.
+        let rowW = 1800.0;
+        let columnGap = 80.0;
+        let contentW = rowW * 2.0 + columnGap;
         let content = new inkCanvas();
         content.SetAnchor(inkEAnchor.TopCenter);
         content.SetAnchorPoint(0.5, 0.0);
-        content.SetSize(new Vector2(2640.0, 1400.0));
-        content.SetMargin(new inkMargin(0.0, 50.0, 0.0, 0.0));
+        content.SetSize(new Vector2(contentW, 1900.0));
+        content.SetMargin(new inkMargin(0.0, 60.0, 0.0, 0.0));
         content.Reparent(page);
 
-        this.AddText(content, heading, 56, 0.0, 0.0, 2640.0, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
+        this.AddText(content, heading, 56, 0.0, 0.0, contentW, 90.0, this.Teal(), true).SetText("WHEEL SETTINGS");
 
         ArrayClear(this.m_rowValues);
         ArrayClear(this.m_rowMarks);
+        this.ClearSliders();
         let count = NightWheel_ScreenRowCount();
         let boostRow = NightWheel_ScreenBoostRow();
         let columnY: array<Float>;
-        ArrayPush(columnY, 100.0);
-        ArrayPush(columnY, 100.0);
-        let columnW = 1280.0;
+        ArrayPush(columnY, 110.0);
+        ArrayPush(columnY, 110.0);
         let row = 0;
         while row < count {
             let column = NightWheel_ScreenColumn(row);
-            let x = Cast<Float>(column) * (columnW + 80.0);
+            let x = Cast<Float>(column) * (rowW + columnGap);
             let y = columnY[column];
             let section = NightWheel_ScreenSection(row);
             if StrLen(section) > 0 {
-                y += 16.0;
-                let band = this.AddRect(content, x, y, columnW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
-                band.SetOpacity(0.9);
-                this.AddRect(content, x, y, columnW, 3.0, this.Teal());
-                this.AddText(content, body, 38, x + 20.0, y, columnW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText(section);
-                y += 70.0;
+                this.AddSection(content, body, section, x, y, rowW);
+                y += 100.0;
+                // Steering comes first within Driving.
+                if row == 0 {
+                    let slider = 0;
+                    while slider < NightWheel_SliderCount() {
+                        this.AddSliderRow(content, body, slider, x, y, rowW);
+                        y += 88.0;
+                        slider += 1;
+                    }
+                }
             }
-            let mark = this.AddRect(content, x, y, columnW, 68.0, this.Red());
-            mark.SetOpacity(0.03);
-            mark.SetName(StringToName(IntToString(row)));
-            mark.SetInteractive(true);
-            mark.RegisterToCallback(n"OnRelease", this, n"OnRowRelease");
-            mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
-            ArrayPush(this.m_rowMarks, mark);
-
-            this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(NightWheel_ScreenRowLabel(row));
-
-            let boxX = x + 640.0;
-            let boxW = 620.0;
-            this.AddRect(content, boxX, y + 6.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 60.0, boxW, 2.0, this.Red());
-            this.AddRect(content, boxX, y + 6.0, 2.0, 56.0, this.Red());
-            this.AddRect(content, boxX + boxW - 2.0, y + 6.0, 2.0, 56.0, this.Red());
-            ArrayPush(this.m_rowValues, this.AddText(content, body, 34, boxX, y, boxW, 68.0, this.Teal(), true));
-            y += 72.0;
-
+            this.AddBindingRow(content, body, row, x, y, rowW);
+            y += 88.0;
+            // The boost strength slider follows the steering sliders in the plugin's numbering.
             if row == boostRow {
-                this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText("Boost strength");
-                let down = this.AddRect(content, boxX, y + 6.0, 70.0, 56.0, this.Red());
-                down.SetOpacity(0.35);
-                down.SetInteractive(true);
-                down.RegisterToCallback(n"OnRelease", this, n"OnBoostDown");
-                this.AddText(content, body, 40, boxX, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("-");
-                let up = this.AddRect(content, boxX + boxW - 70.0, y + 6.0, 70.0, 56.0, this.Red());
-                up.SetOpacity(0.35);
-                up.SetInteractive(true);
-                up.RegisterToCallback(n"OnRelease", this, n"OnBoostUp");
-                this.AddText(content, body, 40, boxX + boxW - 70.0, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("+");
-                let trackX = boxX + 80.0;
-                let trackW = boxW - 160.0;
-                let track = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Red());
-                track.SetOpacity(0.08);
-                this.m_boostFill = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Teal());
-                this.m_boostFill.SetOpacity(0.45);
-                this.m_boostValue = this.AddText(content, body, 34, trackX, y, trackW, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true);
-                y += 72.0;
+                this.AddSliderRow(content, body, NightWheel_SliderCount(), x, y, rowW);
+                y += 88.0;
             }
             columnY[column] = y;
             row += 1;
         }
 
-        // The steering section, below both columns and as wide as the game's own settings rows.
-        this.ClearSliders();
-        let sliderW = 1800.0;
-        let sliderX = (2640.0 - sliderW) / 2.0;
-        let sliderY = MaxF(columnY[0], columnY[1]) + 16.0;
-        let sliderBand = this.AddRect(content, sliderX, sliderY, sliderW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
-        sliderBand.SetOpacity(0.9);
-        this.AddRect(content, sliderX, sliderY, sliderW, 3.0, this.Teal());
-        this.AddText(content, body, 38, sliderX + 20.0, sliderY, sliderW - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText("Steering");
-        sliderY += 70.0;
-        let slider = 0;
-        while slider < NightWheel_SliderCount() {
-            if !this.AddGameSlider(content, slider, sliderX, sliderY) {
-                this.AddSlider(content, body, slider, sliderX, sliderY);
-            }
-            sliderY += 88.0;
-            slider += 1;
-        }
-        columnY[1] = sliderY;
-
         let bottom = MaxF(columnY[0], columnY[1]);
-        this.m_status = this.AddText(content, heading, 30, 0.0, bottom + 8.0, 2640.0, 50.0, this.Teal(), true);
-        this.m_hints = this.AddText(content, heading, 26, 0.0, bottom + 62.0, 2640.0, 44.0, this.Red(), true);
+        this.m_status = this.AddText(content, heading, 30, 0.0, bottom + 16.0, contentW, 50.0, this.Teal(), true);
+        this.m_hints = this.AddText(content, heading, 26, 0.0, bottom + 70.0, contentW, 44.0, this.Red(), true);
 
         this.m_screen = page;
         if IsDefined(this.m_menuRoot) {
@@ -983,93 +938,193 @@ public class NightWheelService extends ScriptableService {
         ArrayClear(this.m_sliderFills);
         ArrayClear(this.m_sliderControls);
         ArrayClear(this.m_sliderShown);
+        ArrayClear(this.m_sliderTrackW);
     }
 
-    // Uses the row from the game's own settings menu, so it looks the same. The row's controller
-    // expects a game setting, which these values aren't, so only its look and slider are used, and
-    // this script handles its arrows. False means the row couldn't be used, and the page draws its
-    // own instead, which also covers a game patch renaming anything here.
-    private func AddGameSlider(content: ref<inkCanvas>, index: Int32, x: Float, y: Float) -> Bool {
+    // The rows and section headers come from the game's own settings menu, so they look the same.
+    // Their controllers expect a game setting, which these values aren't, so only their look is
+    // used. An invisible layer over each row takes the mouse, so those controllers never handle it.
+    // If a widget or a named part is missing, as a game patch might cause, the page draws its own
+    // and the log says what was missing.
+    private func SpawnGameRow(content: ref<inkCanvas>, item: CName) -> ref<inkCompoundWidget> {
         if !IsDefined(this.m_menuController) {
-            NightWheel_Event("game slider: no menu controller");
-            return false;
+            NightWheel_Event("game row: no menu controller");
+            let none: ref<inkCompoundWidget>;
+            return none;
         }
-        let row = this.m_menuController.SpawnFromExternal(content, r"base\\gameplay\\gui\\fullscreen\\settings\\settings_main.inkwidget", n"settingsSelectorInt") as inkCompoundWidget;
+        let row = this.m_menuController.SpawnFromExternal(content, r"base\\gameplay\\gui\\fullscreen\\settings\\settings_main.inkwidget", item) as inkCompoundWidget;
         if !IsDefined(row) {
-            NightWheel_Event("game slider: row not found");
-            return false;
+            NightWheel_Event(s"game row: \(NameToString(item)) not found");
         }
-        let label = row.GetWidget(n"layout/labels/label") as inkText;
-        let value = row.GetWidget(n"layout/container/slidingArea/knob/txtValue") as inkText;
-        let container = row.GetWidget(n"layout/container");
-        let left = row.GetWidget(n"layout/container/btnLeft");
-        let right = row.GetWidget(n"layout/container/btnRight");
-        let control: ref<inkSliderController>;
-        if IsDefined(container) {
-            control = container.GetController() as inkSliderController;
+        return row;
+    }
+
+    // Finds a part one name at a time, and logs the first name that's missing.
+    private func RowPart(row: ref<inkCompoundWidget>, first: CName, second: CName, third: CName) -> ref<inkWidget> {
+        let names: array<CName>;
+        ArrayPush(names, first);
+        if NotEquals(second, n"") {
+            ArrayPush(names, second);
         }
-        if !IsDefined(label) || !IsDefined(value) || !IsDefined(left) || !IsDefined(right) || !IsDefined(control) {
-            NightWheel_Event("game slider: row has changed");
-            content.RemoveChild(row);
-            return false;
+        if NotEquals(third, n"") {
+            ArrayPush(names, third);
         }
+        let current = row;
+        let found: ref<inkWidget>;
+        let index = 0;
+        while index < ArraySize(names) {
+            found = current.GetWidget(names[index]);
+            if !IsDefined(found) {
+                NightWheel_Event(s"game row: part \(NameToString(names[index])) missing");
+                return found;
+            }
+            current = found as inkCompoundWidget;
+            index += 1;
+            if index < ArraySize(names) && !IsDefined(current) {
+                NightWheel_Event(s"game row: part \(NameToString(names[index - 1])) has no children");
+                let none: ref<inkWidget>;
+                return none;
+            }
+        }
+        return found;
+    }
+
+    private func PlaceRow(row: ref<inkCompoundWidget>, x: Float, y: Float, w: Float, h: Float) {
         row.SetAnchor(inkEAnchor.TopLeft);
         row.SetMargin(new inkMargin(x, y, 0.0, 0.0));
-        row.SetSize(new Vector2(1800.0, 80.0));
+        row.SetSize(new Vector2(w, h));
         let modified = row.GetWidget(n"modifiedFlag");
         if IsDefined(modified) {
             modified.SetVisible(false);
         }
-        let hints = row.GetWidget(n"layout/container/inputHintsContainer");
-        if IsDefined(hints) {
-            hints.SetVisible(false);
-        }
-        label.SetText(NightWheel_SliderLabel(index));
-        let shown = NightWheel_SliderFraction(index);
-        control.Setup(0.0, 1.0, shown, 0.01);
-        control.SetInputDisabled(true);
-        let name = StringToName(IntToString(index));
-        left.SetName(name);
-        right.SetName(name);
-        left.RegisterToCallback(n"OnRelease", this, n"OnSliderDown");
-        right.RegisterToCallback(n"OnRelease", this, n"OnSliderUp");
-        let noFill: ref<inkRectangle>;
-        ArrayPush(this.m_sliderValues, value);
-        ArrayPush(this.m_sliderFills, noFill);
-        ArrayPush(this.m_sliderControls, control);
-        ArrayPush(this.m_sliderShown, shown);
-        NightWheel_Event(s"game slider: row \(index) added");
-        return true;
     }
 
-    private func AddSlider(content: ref<inkCanvas>, body: String, index: Int32, x: Float, y: Float) {
-        let boxX = x + 640.0;
-        let boxW = 620.0;
+    private func AddSection(content: ref<inkCanvas>, body: String, title: String, x: Float, y: Float, w: Float) {
+        let row = this.SpawnGameRow(content, n"settingsCategory");
+        if IsDefined(row) {
+            let label = this.RowPart(row, n"layout", n"inkCanvasWidget4", n"label") as inkText;
+            if IsDefined(label) {
+                this.PlaceRow(row, x, y, w, 80.0);
+                let inner = this.RowPart(row, n"layout", n"inkCanvasWidget4", n"");
+                inner.SetSize(new Vector2(w, 80.0));
+                label.SetText(title);
+                return;
+            }
+            content.RemoveChild(row);
+        }
+        let band = this.AddRect(content, x, y, w, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
+        band.SetOpacity(0.9);
+        this.AddRect(content, x, y, w, 3.0, this.Teal());
+        this.AddText(content, body, 38, x + 20.0, y, w - 40.0, 62.0, new HDRColor(0.9, 0.9, 0.9, 1.0), false).SetText(title);
+    }
+
+    private func AddBindingRow(content: ref<inkCanvas>, body: String, index: Int32, x: Float, y: Float, w: Float) {
+        let half = w / 2.0;
+        let drawn = false;
+        let row = this.SpawnGameRow(content, n"settingsSelectorKeyBinding");
+        if IsDefined(row) {
+            let label = this.RowPart(row, n"layout", n"labels", n"label") as inkText;
+            if IsDefined(label) {
+                this.PlaceRow(row, x, y, w, 80.0);
+                label.SetText(NightWheel_ScreenRowLabel(index));
+                let text = this.RowPart(row, n"layout", n"container", n"inkRichTextBoxWidget2");
+                if IsDefined(text) {
+                    text.SetVisible(false);
+                }
+                drawn = true;
+            } else {
+                content.RemoveChild(row);
+            }
+        }
+        if !drawn {
+            this.AddText(content, body, 42, x + 20.0, y, half - 40.0, 80.0, this.Red(), false).SetText(NightWheel_ScreenRowLabel(index));
+            this.AddRect(content, x + half, y + 6.0, half, 2.0, this.Red());
+            this.AddRect(content, x + half, y + 72.0, half, 2.0, this.Red());
+            this.AddRect(content, x + half, y + 6.0, 2.0, 68.0, this.Red());
+            this.AddRect(content, x + w - 2.0, y + 6.0, 2.0, 68.0, this.Red());
+        }
+        ArrayPush(this.m_rowValues, this.AddText(content, body, 42, x + half, y, half, 80.0, this.Teal(), true));
+        let mark = this.AddRect(content, x, y, w, 80.0, this.Red());
+        mark.SetOpacity(0.01);
+        mark.SetName(StringToName(IntToString(index)));
+        mark.SetInteractive(true);
+        mark.RegisterToCallback(n"OnRelease", this, n"OnRowRelease");
+        mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
+        ArrayPush(this.m_rowMarks, mark);
+    }
+
+    private func AddSliderRow(content: ref<inkCanvas>, body: String, index: Int32, x: Float, y: Float, w: Float) {
+        let half = w / 2.0;
         let name = StringToName(IntToString(index));
-        this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(NightWheel_SliderLabel(index));
-        let down = this.AddRect(content, boxX, y + 6.0, 70.0, 56.0, this.Red());
-        down.SetOpacity(0.35);
+        let shown = NightWheel_SliderFraction(index);
+        let noFill: ref<inkRectangle>;
+        let noControl: ref<inkSliderController>;
+        let fill = noFill;
+        let control = noControl;
+        let value: ref<inkText>;
+        let row = this.SpawnGameRow(content, n"settingsSelectorInt");
+        if IsDefined(row) {
+            let label = this.RowPart(row, n"layout", n"labels", n"label") as inkText;
+            let knob = this.RowPart(row, n"layout", n"container", n"slidingArea") as inkCompoundWidget;
+            if IsDefined(knob) {
+                value = knob.GetWidget(n"knob/txtValue") as inkText;
+                if !IsDefined(value) {
+                    NightWheel_Event("game row: part knob/txtValue missing");
+                }
+            }
+            if IsDefined(label) && IsDefined(value) {
+                this.PlaceRow(row, x, y, w, 80.0);
+                label.SetText(NightWheel_SliderLabel(index));
+                let hints = this.RowPart(row, n"layout", n"container", n"inputHintsContainer");
+                if IsDefined(hints) {
+                    hints.SetVisible(false);
+                }
+                let container = this.RowPart(row, n"layout", n"container", n"");
+                if IsDefined(container) {
+                    control = container.GetController() as inkSliderController;
+                }
+                if IsDefined(control) {
+                    control.Setup(0.0, 1.0, shown, 0.01);
+                    control.SetInputDisabled(true);
+                } else {
+                    NightWheel_Event("game row: slider controller missing");
+                }
+            } else {
+                content.RemoveChild(row);
+                value = null;
+            }
+        }
+        if !IsDefined(value) {
+            this.AddText(content, body, 42, x + 20.0, y, half - 40.0, 80.0, this.Red(), false).SetText(NightWheel_SliderLabel(index));
+            let trackX = x + half + 90.0;
+            let trackW = half - 180.0;
+            let track = this.AddRect(content, trackX, y + 12.0, trackW, 56.0, this.Red());
+            track.SetOpacity(0.08);
+            fill = this.AddRect(content, trackX, y + 12.0, trackW, 56.0, this.Teal());
+            fill.SetOpacity(0.45);
+            value = this.AddText(content, body, 42, trackX, y, trackW, 80.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true);
+            this.AddText(content, body, 48, x + half, y, 90.0, 80.0, this.Teal(), true).SetText("<");
+            this.AddText(content, body, 48, x + w - 90.0, y, 90.0, 80.0, this.Teal(), true).SetText(">");
+        }
+        // Takes the mouse for the whole row, and the arrow areas on top of it do the work.
+        let cover = this.AddRect(content, x, y, w, 80.0, this.Red());
+        cover.SetOpacity(0.01);
+        cover.SetInteractive(true);
+        let down = this.AddRect(content, x + half, y, 175.0, 80.0, this.Teal());
+        down.SetOpacity(0.01);
         down.SetName(name);
         down.SetInteractive(true);
         down.RegisterToCallback(n"OnRelease", this, n"OnSliderDown");
-        this.AddText(content, body, 40, boxX, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("-");
-        let up = this.AddRect(content, boxX + boxW - 70.0, y + 6.0, 70.0, 56.0, this.Red());
-        up.SetOpacity(0.35);
+        let up = this.AddRect(content, x + w - 175.0, y, 175.0, 80.0, this.Teal());
+        up.SetOpacity(0.01);
         up.SetName(name);
         up.SetInteractive(true);
         up.RegisterToCallback(n"OnRelease", this, n"OnSliderUp");
-        this.AddText(content, body, 40, boxX + boxW - 70.0, y, 70.0, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true).SetText("+");
-        let trackX = boxX + 80.0;
-        let trackW = boxW - 160.0;
-        let track = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Red());
-        track.SetOpacity(0.08);
-        let fill = this.AddRect(content, trackX, y + 6.0, trackW, 56.0, this.Teal());
-        fill.SetOpacity(0.45);
-        let noControl: ref<inkSliderController>;
+        ArrayPush(this.m_sliderValues, value);
         ArrayPush(this.m_sliderFills, fill);
-        ArrayPush(this.m_sliderControls, noControl);
-        ArrayPush(this.m_sliderShown, -1.0);
-        ArrayPush(this.m_sliderValues, this.AddText(content, body, 34, trackX, y, trackW, 68.0, new HDRColor(1.0, 1.0, 1.0, 1.0), true));
+        ArrayPush(this.m_sliderTrackW, half - 180.0);
+        ArrayPush(this.m_sliderControls, control);
+        ArrayPush(this.m_sliderShown, shown);
     }
 
     protected cb func OnSliderDown(event: ref<inkPointerEvent>) -> Bool {
@@ -1081,18 +1136,6 @@ public class NightWheelService extends ScriptableService {
     protected cb func OnSliderUp(event: ref<inkPointerEvent>) -> Bool {
         if event.IsAction(n"click") {
             NightWheel_SliderAdjust(StringToInt(NameToString(event.GetCurrentTarget().GetName())), 1);
-        }
-    }
-
-    protected cb func OnBoostDown(event: ref<inkPointerEvent>) -> Bool {
-        if event.IsAction(n"click") {
-            NightWheel_BoostAdjust(-1);
-        }
-    }
-
-    protected cb func OnBoostUp(event: ref<inkPointerEvent>) -> Bool {
-        if event.IsAction(n"click") {
-            NightWheel_BoostAdjust(1);
         }
     }
 
@@ -1120,8 +1163,6 @@ public class NightWheelService extends ScriptableService {
             this.m_screen = null;
             this.m_status = null;
             this.m_hints = null;
-            this.m_boostValue = null;
-            this.m_boostFill = null;
             ArrayClear(this.m_rowValues);
             ArrayClear(this.m_rowMarks);
             this.ClearSliders();
@@ -1157,9 +1198,9 @@ public class NightWheelService extends ScriptableService {
         while row < ArraySize(this.m_rowValues) {
             this.m_rowValues[row].SetText(NightWheel_ScreenRowValue(row));
             if NightWheel_ScreenRowLit(row) {
-                this.m_rowMarks[row].SetOpacity(0.7);
+                this.m_rowMarks[row].SetOpacity(0.4);
             } else {
-                this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
+                this.m_rowMarks[row].SetOpacity(row == selected ? 0.14 : 0.01);
             }
             row += 1;
         }
@@ -1168,7 +1209,7 @@ public class NightWheelService extends ScriptableService {
             this.m_sliderValues[slider].SetText(NightWheel_SliderValue(slider));
             let fraction = NightWheel_SliderFraction(slider);
             if IsDefined(this.m_sliderFills[slider]) {
-                this.m_sliderFills[slider].SetSize(new Vector2(460.0 * fraction, 56.0));
+                this.m_sliderFills[slider].SetSize(new Vector2(this.m_sliderTrackW[slider] * fraction, 56.0));
             }
             // Only when it changes, because this runs on every refresh.
             if IsDefined(this.m_sliderControls[slider]) && NotEquals(fraction, this.m_sliderShown[slider]) {
@@ -1177,9 +1218,6 @@ public class NightWheelService extends ScriptableService {
             }
             slider += 1;
         }
-        let percent = NightWheel_BoostPercent();
-        this.m_boostValue.SetText(s"\(percent)%");
-        this.m_boostFill.SetSize(new Vector2(460.0 * Cast<Float>(percent) / 200.0, 56.0));
         this.m_status.SetText(NightWheel_ScreenStatus());
         this.m_hints.SetText(NightWheel_ScreenHints());
     }

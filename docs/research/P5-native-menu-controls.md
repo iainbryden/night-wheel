@@ -43,3 +43,18 @@ Risks for the test:
 - The row's `Setup` is never called, so the row's own controller has no game setting behind it. If its handlers use that when hovered or clicked, they could misbehave, and in the worst case the game could crash. Keep a save first.
 - The slider's knob may not draw or move correctly with input turned off.
 - The row depends on a game file's internal names, which a patch could change. The fallback covers missing names, not changed behaviour.
+
+## Run of 0.23.0, 2026-11-06
+
+Approved by the user; files replaced and checksums verified. The screenshot shows the old drawing, and the log says `game slider: row has changed` three times. So the row spawned from the pause menu's controller, but looking up one of its parts failed. Which part isn't known, because the check covered them all at once. No crash was reported.
+
+## Page rebuild
+
+Version 0.24.0, not run in the game. The whole page now tries the game's widgets: `settingsCategory` for section headers, `settingsSelectorKeyBinding` for binding rows and `settingsSelectorInt` for sliders. Requested by the user, comparing the page with the game's Sound settings.
+
+- Parts are found one name at a time, and the log names the first one missing.
+- Steering comes first in Driving, and Flight moves to the top of the right column to balance the page. Boost strength joins the same slider code.
+- Rows are 1800 wide, so the columns take 3680 of the 3840 width.
+- An invisible layer over each row takes the mouse, so the game's controllers shouldn't handle it. Those controllers still exist without a game setting behind them, and how they behave at spawn is untested.
+- The fallback drawing was rebuilt to match the layout.
+- The arrow click areas are placed from the widget file's sizes, and may need adjusting.

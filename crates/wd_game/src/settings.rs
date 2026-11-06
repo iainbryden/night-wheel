@@ -6,7 +6,7 @@
 use crate::drive::{HAT_DOWN, HAT_LEFT, HAT_RIGHT, HAT_SHIFT, HAT_UP, bit_for};
 use std::collections::BTreeSet;
 use wd_core::assignment::{Action, Bindings};
-use wd_core::config::{Config, STEERING_RANGE, STEERING_SPEED_RANGE};
+use wd_core::config::{BOOST_PERCENT_RANGE, Config, STEERING_RANGE, STEERING_SPEED_RANGE};
 use wd_core::input::{ButtonId, Control, Sample};
 use wd_core::listen::{ButtonListener, LISTEN_TIMEOUT_MS, ListenOutcome};
 
@@ -50,10 +50,10 @@ pub const ROWS: [(Action, u32); 22] = [
     (Action::Autodrive, PAD_LEFT_THUMB),
     (Action::CombatMode, PAD_Y),
     (Action::Boost, SCRIPT_BOOST),
-    (Action::FlyUp, SCRIPT_FLY_UP),
-    (Action::FlyDown, SCRIPT_FLY_DOWN),
     (Action::Scanner, PAD_LEFT_SHOULDER),
     (Action::PauseMenu, PAD_START),
+    (Action::FlyUp, SCRIPT_FLY_UP),
+    (Action::FlyDown, SCRIPT_FLY_DOWN),
     (Action::CameraChange, PAD_DPAD_RIGHT),
     (Action::RearView, PAD_RIGHT_THUMB),
     (Action::CameraReset, PAD_LEFT_THUMB),
@@ -73,8 +73,8 @@ pub const BOOST_ROW: usize = 6;
 /// Where each section starts on the page, its title, and its column.
 const SECTIONS: [(usize, &str, usize); 5] = [
     (0, "Driving", 0),
-    (7, "Flight", 0),
-    (9, "Other", 0),
+    (7, "Other", 0),
+    (9, "Flight", 1),
     (11, "Camera", 1),
     (16, "Radio", 1),
 ];
@@ -96,8 +96,9 @@ pub fn column_of(row: usize) -> usize {
         .map_or(0, |(_, _, column)| *column)
 }
 
-/// The steering sliders on the page, in order.
+/// The steering sliders on the page, in order. The boost strength slider is the next number.
 pub const SLIDER_COUNT: i32 = 3;
+const BOOST_STEP: i64 = 5;
 const RANGE_STEP: i64 = 30;
 const CURVE_STEP: f64 = 0.1;
 const CURVE_RANGE: std::ops::RangeInclusive<f64> = 1.0..=4.0;
@@ -112,6 +113,7 @@ pub fn slider_label(index: i32) -> &'static str {
         0 => "Steering range",
         1 => "Center response",
         2 => "Steering speed (next start)",
+        3 => "Boost strength",
         _ => "",
     }
 }
@@ -126,6 +128,7 @@ pub fn slider_value(index: i32, config: &Config) -> String {
                 .steering_speed
                 .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED))
         ),
+        3 => format!("{}%", config.boost_percent),
         _ => String::new(),
     }
 }
@@ -148,6 +151,11 @@ pub fn slider_fraction(index: i32, config: &Config) -> f64 {
                 .unwrap_or(f64::from(crate::drive::DEFAULT_STEERING_SPEED)),
             *STEERING_SPEED_RANGE.start(),
             *STEERING_SPEED_RANGE.end(),
+        ),
+        3 => along(
+            f64::from(config.boost_percent),
+            f64::from(*BOOST_PERCENT_RANGE.start()),
+            f64::from(*BOOST_PERCENT_RANGE.end()),
         ),
         _ => 0.0,
     }
@@ -178,6 +186,13 @@ pub fn slider_adjust(index: i32, steps: i32, config: &mut Config) -> bool {
                 (current + f64::from(steps))
                     .clamp(*STEERING_SPEED_RANGE.start(), *STEERING_SPEED_RANGE.end()),
             );
+        }
+        3 => {
+            let moved = i64::from(config.boost_percent) + i64::from(steps) * BOOST_STEP;
+            config.boost_percent = moved.clamp(
+                i64::from(*BOOST_PERCENT_RANGE.start()),
+                i64::from(*BOOST_PERCENT_RANGE.end()),
+            ) as u32;
         }
         _ => {}
     }
@@ -572,6 +587,13 @@ mod tests {
         assert_eq!(slider_value(2, &config), "x2");
         assert_eq!(slider_fraction(0, &config), 1.0);
         assert_eq!(slider_fraction(1, &config), 0.0);
+        assert_eq!(slider_value(3, &config), "25%");
+        assert_eq!(slider_fraction(3, &config), 0.0);
+        assert!(slider_adjust(3, 2, &mut config));
+        assert_eq!(config.boost_percent, 35);
+        slider_adjust(3, 1000, &mut config);
+        assert_eq!(config.boost_percent, 200);
+        assert_eq!(slider_fraction(3, &config), 1.0);
         assert_eq!(slider_value(9, &config), "");
         assert!(!slider_adjust(9, 1, &mut config));
     }
@@ -737,11 +759,13 @@ mod tests {
     #[test]
     fn sections_start_where_they_should() {
         assert_eq!(section_at(0), "Driving");
-        assert_eq!(section_at(7), "Flight");
         assert_eq!(section_at(11), "Camera");
         assert_eq!(section_at(16), "Radio");
         assert_eq!(section_at(1), "");
-        assert_eq!(ROWS[7].0, Action::FlyUp);
+        assert_eq!(section_at(7), "Other");
+        assert_eq!(section_at(9), "Flight");
+        assert_eq!(ROWS[7].0, Action::Scanner);
+        assert_eq!(ROWS[9].0, Action::FlyUp);
         assert_eq!(ROWS[11].0, Action::CameraChange);
         assert_eq!(ROWS[16].0, Action::RadioMenu);
         assert_eq!(ROWS[BOOST_ROW].0, Action::Boost);
@@ -750,8 +774,8 @@ mod tests {
     #[test]
     fn rows_fall_in_their_section_column() {
         assert_eq!(column_of(0), 0);
-        assert_eq!(column_of(10), 0);
-        assert_eq!(column_of(11), 1);
+        assert_eq!(column_of(8), 0);
+        assert_eq!(column_of(9), 1);
         assert_eq!(column_of(21), 1);
     }
 
