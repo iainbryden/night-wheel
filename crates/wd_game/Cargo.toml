@@ -1,6 +1,6 @@
 [package]
 name = "wd_game"
-description = "Game test plugin: wheel input through the game's gamepad polls, with no motor output"
+description = "Game plugin: wheel input through the game's gamepad polls, with no motor output"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

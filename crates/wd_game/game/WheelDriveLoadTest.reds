@@ -1,15 +1,12 @@
-// Game test. Tells the plugin each frame whether the player is driving, because the wheel must
-// only apply then. Four steering speed values are multiplied in memory when the game starts, for
-// every vehicle drive model, by an amount the plugin supplies. Nothing is saved.
-// During pause, it tests one way into a settings screen: a WHEEL SETTINGS entry in the pause menu,
-// with the period key as a fallback. The plugin runs the screen, and this script passes it keys and
-// draws a full page, laid out like the game's Key Bindings page. While that page is open the pause
-// menu is hidden and its entries do nothing, and going back returns to the pause menu.
+// The game side of the mod. Each frame it tells the plugin whether the player is driving, because
+// the wheel only applies then, and it carries out the functions that have no gamepad button: radio
+// controls, boost and flight. Four steering speed values are multiplied in memory when the game
+// starts, for every vehicle drive model, by an amount the plugin supplies.
+// The WHEEL SETTINGS pause menu entry opens a full page, laid out like the game's Key Bindings page.
+// The plugin runs that page, and this script passes it input and draws it. While it is open the
+// pause menu is hidden and its entries do nothing. Nothing here changes a save.
 
-native func WheelDriveTest_Ping(value: Int32) -> Int32;
 native func WheelDriveTest_Event(name: String);
-native func WheelDriveTest_Read() -> Int32;
-native func WheelDriveTest_Key() -> Int32;
 native func WheelDriveTest_SetDriving(driving: Bool);
 native func WheelDriveTest_SteeringAction(value: Float);
 native func WheelDriveTest_SteeringSpeed() -> Float;
@@ -108,7 +105,7 @@ protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
     return wrappedMethod(e);
 }
 
-// A further try at going back: the pause menu scenario's own back handler.
+// The same for the pause menu scenario's own back handler.
 @wrapMethod(MenuScenario_PauseMenu)
 protected cb func OnBack() -> Bool {
     let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
@@ -135,8 +132,7 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_driving: Bool;
     private let m_listening: wref<PlayerPuppet>;
     private let m_paused: Bool;
-    private let m_steering: Int32;
-    private let m_hint: ref<inkText>;
+    private let m_refreshHost: ref<inkText>;
     private let m_refresh: ref<inkAnimProxy>;
     private let m_screen: ref<inkCanvas>;
     private let m_menuRoot: wref<inkWidget>;
@@ -144,14 +140,12 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_rowMarks: array<ref<inkRectangle>>;
     private let m_status: ref<inkText>;
     private let m_hints: ref<inkText>;
-    private let m_listedMenuFunctions: Bool;
     private let m_inMenu: Bool;
     private let m_turn: Float;
     private let m_flying: Bool;
     private let m_flightStart: Float;
     private let m_flightTarget: Float;
     private let m_flightLastTime: Float;
-    private let m_flightLogged: Float;
     private let m_flightLastYaw: Float;
     private let m_flightYawRate: Float;
     private let m_flightX: Float;
@@ -170,7 +164,6 @@ public class WheelDriveTestService extends ScriptableService {
     private let m_topSeen: Float;
     private let m_boostVehicle: EntityID;
     private let m_lastBoostTime: Float;
-    private let m_reportedEngine: Bool;
     private let m_boostValue: ref<inkText>;
     private let m_boostFill: ref<inkRectangle>;
 
@@ -180,7 +173,6 @@ public class WheelDriveTestService extends ScriptableService {
 
     private cb func OnLoad() {
         WheelDriveTest_Event("script-loaded");
-        WheelDriveTest_Ping(41);
 
         let callbacks = GameInstance.GetCallbackSystem();
         callbacks.RegisterCallback(n"Session/Ready", this, n"OnSessionReady");
@@ -201,7 +193,7 @@ public class WheelDriveTestService extends ScriptableService {
     private cb func OnSessionPause(event: ref<GameSessionEvent>) {
         this.m_paused = true;
         WheelDriveTest_Event("session-pause");
-        this.ShowHint();
+        this.StartPauseUpdates();
     }
 
     private cb func OnSessionResume(event: ref<GameSessionEvent>) {
@@ -220,20 +212,9 @@ public class WheelDriveTestService extends ScriptableService {
         this.HideAll();
     }
 
-    // Records that a press arrived, and never which key outside the one test key.
+    // Keys only matter while the settings page is open.
     private cb func OnKey(event: ref<KeyInputEvent>) {
-        if NotEquals(event.GetAction(), EInputAction.IACT_Press) {
-            return;
-        }
-        WheelDriveTest_Key();
-        if !this.m_paused {
-            return;
-        }
-        if !this.IsScreenOpen() {
-            if Equals(event.GetKey(), EInputKey.IK_Period) {
-                WheelDriveTest_Event("wheel-key-activated");
-                this.OpenScreen();
-            }
+        if NotEquals(event.GetAction(), EInputAction.IACT_Press) || !this.m_paused || !this.IsScreenOpen() {
             return;
         }
         switch event.GetKey() {
@@ -304,13 +285,12 @@ public class WheelDriveTestService extends ScriptableService {
             WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
             if driving {
                 this.StartListening(player);
-                this.ReportRates(player);
             }
         }
     }
 
     // The game's own driving must not have the wheel steering against it. The flag's name comes
-    // from the game's vehicle blackboard, and the log shows whether it follows Autodrive.
+    // from the game's vehicle blackboard. Whether it follows Autodrive isn't confirmed in play.
     private func UpdateAutopilot(player: ref<PlayerPuppet>) {
         let vehicle = GetMountedVehicle(player);
         if !IsDefined(vehicle) {
@@ -336,7 +316,6 @@ public class WheelDriveTestService extends ScriptableService {
         if !IsDefined(vehicle) {
             return;
         }
-        this.ReportEngine(vehicle);
         if this.m_flying {
             this.EndBoost("flying");
             return;
@@ -503,17 +482,7 @@ public class WheelDriveTestService extends ScriptableService {
         GameInstance.GetTeleportationFacility(game).Teleport(vehicle, new Vector4(x, y, z, 1.0), facing);
 
         // Cancels the gravity that would otherwise build up between frames.
-        let actual = vehicle.GetWorldPosition();
-        this.Push(vehicle, actual, 0.0, 0.0, vehicle.GetTotalMass() * 9.81 * elapsed);
-
-        if now - this.m_flightLogged >= 1.0 {
-            this.m_flightLogged = now;
-            if !groundKnown {
-                WheelDriveTest_Event(s"flight: no ground found at height \(FloatToString(z))");
-            }
-            let physics = vehicle.GetLinearVelocity();
-            WheelDriveTest_Event(s"flight: up \(FloatToString(z - this.m_flightStart)), target \(FloatToString(this.m_flightTarget - this.m_flightStart)), clearance \(FloatToString(clearance)), rise \(FloatToString(this.m_flightVZ)), along \(FloatToString(along)), turn \(FloatToString(this.m_turn)), yaw rate \(FloatToString(this.m_flightYawRate)), actual z error \(FloatToString(actual.Z - z)), physics rise \(FloatToString(physics.Z))");
-        }
+        this.Push(vehicle, vehicle.GetWorldPosition(), 0.0, 0.0, vehicle.GetTotalMass() * 9.81 * elapsed);
     }
 
     // The height a ray hits in one collision group, or a very low value if it hits nothing.
@@ -564,27 +533,6 @@ public class WheelDriveTestService extends ScriptableService {
         if this.m_boosting {
             this.m_boosting = false;
             WheelDriveTest_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
-        }
-    }
-
-    // Logged once, to look for a value for the car's real top speed.
-    private func ReportEngine(vehicle: ref<VehicleObject>) {
-        if this.m_reportedEngine {
-            return;
-        }
-        this.m_reportedEngine = true;
-        let record = vehicle.GetRecord().VehEngineDataHandle();
-        if !IsDefined(record) {
-            WheelDriveTest_Event("engine: no record");
-            return;
-        }
-        let cls = Reflection.GetClassOf(ToVariant(record), true);
-        for func in cls.GetFunctions() {
-            let type = func.GetReturnType();
-            let parameters = func.GetParameters();
-            if IsDefined(type) && ArraySize(parameters) == 0 && Equals(type.GetName(), n"Float") {
-                WheelDriveTest_Event(s"engine: \(NameToString(func.GetName())) = \(FloatToString(FromVariant<Float>(func.Call(record))))");
-            }
         }
     }
 
@@ -660,18 +608,6 @@ public class WheelDriveTestService extends ScriptableService {
         }
     }
 
-    // Reads the values through the record, which shows whether the change reached it.
-    private func ReportRates(player: ref<PlayerPuppet>) {
-        let vehicle = GetMountedVehicle(player);
-        if !IsDefined(vehicle) {
-            return;
-        }
-        let model = vehicle.GetRecord().VehDriveModelDataHandle();
-        if IsDefined(model) {
-            WheelDriveTest_Event(s"rate: entity \(EntityID.ToDebugString(vehicle.GetEntityID())) fast \(FloatToString(model.TurnUpdateInputFastChangeSpeed())) slow \(FloatToString(model.TurnUpdateInputSlowChangeSpeed())) add \(FloatToString(model.WheelTurnMaxAddPerSecond())) sub \(FloatToString(model.WheelTurnMaxSubPerSecond()))");
-        }
-    }
-
     private func ScheduleTick() {
         let tick = new WheelDriveTestTick();
         tick.service = this;
@@ -691,8 +627,8 @@ public class WheelDriveTestService extends ScriptableService {
         return text;
     }
 
-    private func ShowHint() {
-        if IsDefined(this.m_hint) {
+    private func StartPauseUpdates() {
+        if IsDefined(this.m_refreshHost) {
             return;
         }
         let layer = this.MenuLayer();
@@ -700,19 +636,18 @@ public class WheelDriveTestService extends ScriptableService {
             WheelDriveTest_Event("menu-layer-missing");
             return;
         }
-        let hint = this.NewText(32);
-        hint.SetAnchor(inkEAnchor.TopCenter);
-        hint.SetAnchorPoint(0.5, 0.0);
-        hint.SetMargin(new inkMargin(0.0, 40.0, 0.0, 0.0));
-        hint.SetText("");
-        hint.Reparent(layer.GetVirtualWindow());
-        this.m_hint = hint;
+        let host = this.NewText(32);
+        host.SetAnchor(inkEAnchor.TopCenter);
+        host.SetAnchorPoint(0.5, 0.0);
+        host.SetMargin(new inkMargin(0.0, 40.0, 0.0, 0.0));
+        host.SetText("");
+        host.Reparent(layer.GetVirtualWindow());
+        this.m_refreshHost = host;
         this.StartRefresh();
-        WheelDriveTest_Event("text-shown");
     }
 
     // The delay system mostly stops during pause, so a looping UI animation drives the display.
-    // It leaves the widget fully visible and only supplies the update.
+    // It plays on an empty text that shows nothing, and only supplies the update.
     private func StartRefresh() {
         let hold = new inkAnimTransparency();
         hold.SetStartTransparency(1.0);
@@ -726,12 +661,11 @@ public class WheelDriveTestService extends ScriptableService {
         options.loopType = inkanimLoopType.Cycle;
         options.loopInfinite = true;
 
-        this.m_refresh = this.m_hint.PlayAnimationWithOptions(definition, options);
+        this.m_refresh = this.m_refreshHost.PlayAnimationWithOptions(definition, options);
         this.m_refresh.RegisterToCallback(inkanimEventType.OnEndLoop, this, n"OnRefresh");
     }
 
     private cb func OnRefresh(proxy: ref<inkAnimProxy>) -> Bool {
-        this.m_steering = WheelDriveTest_Read();
         this.UpdateScreen();
     }
 
@@ -785,7 +719,6 @@ public class WheelDriveTestService extends ScriptableService {
             return;
         }
         WheelDriveTest_ScreenOpen();
-        this.ListMenuFunctions();
 
         let body = "base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily";
         let heading = "base\\gameplay\\gui\\fonts\\orbitron\\orbitron.inkfontfamily";
@@ -886,21 +819,6 @@ public class WheelDriveTestService extends ScriptableService {
         WheelDriveTest_Event("wheel-screen-open");
     }
 
-    // Logged once, to help find how the pause menu handles going back.
-    private func ListMenuFunctions() {
-        if this.m_listedMenuFunctions {
-            return;
-        }
-        this.m_listedMenuFunctions = true;
-        let cls = Reflection.GetClass(n"MenuScenario_PauseMenu");
-        while IsDefined(cls) {
-            for func in cls.GetFunctions() {
-                WheelDriveTest_Event(s"menu-function: \(NameToString(cls.GetName())).\(NameToString(func.GetName()))");
-            }
-            cls = cls.GetParent();
-        }
-    }
-
     protected cb func OnBoostDown(event: ref<inkPointerEvent>) -> Bool {
         if event.IsAction(n"click") {
             WheelDriveTest_BoostAdjust(-1);
@@ -954,9 +872,9 @@ public class WheelDriveTestService extends ScriptableService {
             this.m_refresh.Stop();
             this.m_refresh = null;
         }
-        if IsDefined(this.m_hint) {
-            this.m_hint.SetVisible(false);
-            this.m_hint = null;
+        if IsDefined(this.m_refreshHost) {
+            this.m_refreshHost.SetVisible(false);
+            this.m_refreshHost = null;
         }
     }
 
