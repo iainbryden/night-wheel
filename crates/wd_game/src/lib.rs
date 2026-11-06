@@ -17,7 +17,6 @@ use red4ext_rs::{
     Exportable, GlobalExport, Plugin, SdkEnv, SemVer, U16CStr, export_plugin_symbols, exports,
     global, log, wcstr,
 };
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 use wd_core::config::{self, Config};
@@ -28,52 +27,65 @@ static THREADS: Mutex<Option<(wheel::WheelReader, log_file::Logger)>> = Mutex::n
 static SETTINGS: Mutex<Option<Config>> = Mutex::new(None);
 static SCREEN: Mutex<Option<settings::Screen>> = Mutex::new(None);
 
-struct LoadTest;
+const VERSION_MAJOR: u8 = 0;
+const VERSION_MINOR: u16 = 21;
+const VERSION_PATCH: u32 = 0;
 
-impl Plugin for LoadTest {
+struct NightWheel;
+
+impl Plugin for NightWheel {
     const AUTHOR: &'static U16CStr = wcstr!("Iain Bryden");
-    const NAME: &'static U16CStr = wcstr!("WheelDriveLoadTest");
-    const VERSION: SemVer = SemVer::new(0, 20, 0);
+    const NAME: &'static U16CStr = wcstr!("NightWheel");
+    const VERSION: SemVer = SemVer::new(VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 
     fn exports() -> impl Exportable {
         exports![
-            GlobalExport(global!(c"WheelDriveTest_Event", event)),
-            GlobalExport(global!(c"WheelDriveTest_SetDriving", set_driving)),
-            GlobalExport(global!(c"WheelDriveTest_SteeringAction", steering_action)),
-            GlobalExport(global!(c"WheelDriveTest_SteeringSpeed", steering_speed)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenOpen", screen_open)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenClose", screen_close)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenCommand", screen_command)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenTick", screen_tick)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenRowCount", screen_row_count)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenRowLabel", screen_row_label)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenRowValue", screen_row_value)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenSelected", screen_selected)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenSelect", screen_select)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenRowLit", screen_row_lit)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenSection", screen_section)),
+            GlobalExport(global!(c"NightWheel_Event", event)),
+            GlobalExport(global!(c"NightWheel_SetDriving", set_driving)),
+            GlobalExport(global!(c"NightWheel_SteeringAction", steering_action)),
+            GlobalExport(global!(c"NightWheel_SteeringSpeed", steering_speed)),
+            GlobalExport(global!(c"NightWheel_ScreenOpen", screen_open)),
+            GlobalExport(global!(c"NightWheel_ScreenClose", screen_close)),
+            GlobalExport(global!(c"NightWheel_ScreenCommand", screen_command)),
+            GlobalExport(global!(c"NightWheel_ScreenTick", screen_tick)),
+            GlobalExport(global!(c"NightWheel_ScreenRowCount", screen_row_count)),
+            GlobalExport(global!(c"NightWheel_ScreenRowLabel", screen_row_label)),
+            GlobalExport(global!(c"NightWheel_ScreenRowValue", screen_row_value)),
+            GlobalExport(global!(c"NightWheel_ScreenSelected", screen_selected)),
+            GlobalExport(global!(c"NightWheel_ScreenSelect", screen_select)),
+            GlobalExport(global!(c"NightWheel_ScreenRowLit", screen_row_lit)),
+            GlobalExport(global!(c"NightWheel_ScreenSection", screen_section)),
             GlobalExport(global!(
-                c"WheelDriveTest_TakeScriptActions",
+                c"NightWheel_TakeScriptActions",
                 take_script_actions
             )),
-            GlobalExport(global!(c"WheelDriveTest_ScreenColumn", screen_column)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenBoostRow", screen_boost_row)),
-            GlobalExport(global!(c"WheelDriveTest_BoostPercent", boost_percent)),
-            GlobalExport(global!(c"WheelDriveTest_BoostAdjust", boost_adjust)),
-            GlobalExport(global!(c"WheelDriveTest_BoostWanted", boost_wanted)),
-            GlobalExport(global!(c"WheelDriveTest_ScriptHeld", script_held)),
-            GlobalExport(global!(c"WheelDriveTest_Throttle", throttle)),
-            GlobalExport(global!(c"WheelDriveTest_Brake", brake)),
-            GlobalExport(global!(c"WheelDriveTest_SetAutopilot", set_autopilot)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenStatus", screen_status)),
-            GlobalExport(global!(c"WheelDriveTest_ScreenHints", screen_hints)),
+            GlobalExport(global!(c"NightWheel_ScreenColumn", screen_column)),
+            GlobalExport(global!(c"NightWheel_ScreenBoostRow", screen_boost_row)),
+            GlobalExport(global!(c"NightWheel_BoostPercent", boost_percent)),
+            GlobalExport(global!(c"NightWheel_BoostAdjust", boost_adjust)),
+            GlobalExport(global!(c"NightWheel_BoostWanted", boost_wanted)),
+            GlobalExport(global!(c"NightWheel_ScriptHeld", script_held)),
+            GlobalExport(global!(c"NightWheel_Throttle", throttle)),
+            GlobalExport(global!(c"NightWheel_Brake", brake)),
+            GlobalExport(global!(c"NightWheel_SetAutopilot", set_autopilot)),
+            GlobalExport(global!(c"NightWheel_ScreenStatus", screen_status)),
+            GlobalExport(global!(c"NightWheel_ScreenHints", screen_hints)),
         ]
     }
 
     fn on_load(env: &SdkEnv) {
-        log::info!(env, "WheelDriveLoadTest loaded");
+        log::info!(env, "NightWheel loaded");
+        let adopted = config::adopt_old_settings();
         let logger = log_file::Logger::start(&LOGGER_STOP);
-        log_file::send("plugin loaded, version 0.20.0".to_owned());
+        log_file::send(format!(
+            "plugin loaded, version {}",
+            env!("CARGO_PKG_VERSION")
+        ));
+        if adopted > 0 {
+            log_file::send(format!(
+                "copied {adopted} files from the old settings folder"
+            ));
+        }
         load_profile();
         load_steering_speed();
         xinput_hook::attach(env);
@@ -96,16 +108,11 @@ impl Plugin for LoadTest {
     }
 }
 
-export_plugin_symbols!(LoadTest);
-
-fn profile_path() -> Option<PathBuf> {
-    let base = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(base).join("WheelDrive").join("profile.cfg"))
-}
+export_plugin_symbols!(NightWheel);
 
 /// Without usable settings the wheel never drives; the game keeps its normal input.
 fn load_profile() {
-    let Some(path) = profile_path() else {
+    let Some(path) = config::profile_path() else {
         log_file::send("no settings folder, so the wheel will not drive".to_owned());
         return;
     };
@@ -129,11 +136,7 @@ fn load_profile() {
 
 /// Read before the game asks for it. A missing or unusable file keeps the proven default.
 fn load_steering_speed() {
-    let path = std::env::var_os("LOCALAPPDATA").map(|base| {
-        PathBuf::from(base)
-            .join("WheelDrive")
-            .join("steering-speed.txt")
-    });
+    let path = config::settings_folder().map(|folder| folder.join("steering-speed.txt"));
     let text = path.and_then(|path| std::fs::read_to_string(path).ok());
     let chosen = text.as_deref().and_then(drive::parse_steering_speed);
     let value = chosen.unwrap_or(drive::DEFAULT_STEERING_SPEED);
@@ -163,7 +166,7 @@ fn screen_close() {
 /// still apply until the game closes.
 fn bindings_changed(config: &Config, screen: &mut settings::Screen) {
     shared::set_row_bits(&config.bindings);
-    let saved = profile_path()
+    let saved = config::profile_path()
         .ok_or_else(|| "no settings folder".to_owned())
         .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
     match saved {
@@ -282,7 +285,7 @@ fn boost_adjust(steps: i32) {
         return;
     }
     config.boost_percent = moved;
-    let saved = profile_path()
+    let saved = config::profile_path()
         .ok_or_else(|| "no settings folder".to_owned())
         .and_then(|path| config::save(&path, config).map_err(|problem| problem.to_string()));
     match saved {
@@ -360,7 +363,15 @@ fn pause_after(event: &str, current: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::pause_after;
+    use super::{VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, pause_after};
+
+    #[test]
+    fn the_plugin_version_matches_the_package() {
+        assert_eq!(
+            format!("{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     #[test]
     fn pause_follows_session_events() {

@@ -6,37 +6,37 @@
 // The plugin runs that page, and this script passes it input and draws it. While it is open the
 // pause menu is hidden and its entries do nothing. Nothing here changes a save.
 
-native func WheelDriveTest_Event(name: String);
-native func WheelDriveTest_SetDriving(driving: Bool);
-native func WheelDriveTest_SteeringAction(value: Float);
-native func WheelDriveTest_SteeringSpeed() -> Float;
-native func WheelDriveTest_ScreenOpen();
-native func WheelDriveTest_ScreenClose();
-native func WheelDriveTest_ScreenCommand(code: Int32);
-native func WheelDriveTest_ScreenTick() -> Bool;
-native func WheelDriveTest_ScreenRowCount() -> Int32;
-native func WheelDriveTest_ScreenRowLabel(row: Int32) -> String;
-native func WheelDriveTest_ScreenRowValue(row: Int32) -> String;
-native func WheelDriveTest_ScreenSelected() -> Int32;
-native func WheelDriveTest_ScreenSelect(row: Int32);
-native func WheelDriveTest_ScreenRowLit(row: Int32) -> Bool;
-native func WheelDriveTest_ScreenSection(row: Int32) -> String;
-native func WheelDriveTest_TakeScriptActions() -> Int32;
-native func WheelDriveTest_ScreenColumn(row: Int32) -> Int32;
-native func WheelDriveTest_ScreenBoostRow() -> Int32;
-native func WheelDriveTest_BoostPercent() -> Int32;
-native func WheelDriveTest_BoostAdjust(steps: Int32);
-native func WheelDriveTest_BoostWanted() -> Bool;
-native func WheelDriveTest_ScriptHeld() -> Int32;
-native func WheelDriveTest_Throttle() -> Float;
-native func WheelDriveTest_Brake() -> Float;
-native func WheelDriveTest_SetAutopilot(on: Bool);
-native func WheelDriveTest_ScreenStatus() -> String;
-native func WheelDriveTest_ScreenHints() -> String;
+native func NightWheel_Event(name: String);
+native func NightWheel_SetDriving(driving: Bool);
+native func NightWheel_SteeringAction(value: Float);
+native func NightWheel_SteeringSpeed() -> Float;
+native func NightWheel_ScreenOpen();
+native func NightWheel_ScreenClose();
+native func NightWheel_ScreenCommand(code: Int32);
+native func NightWheel_ScreenTick() -> Bool;
+native func NightWheel_ScreenRowCount() -> Int32;
+native func NightWheel_ScreenRowLabel(row: Int32) -> String;
+native func NightWheel_ScreenRowValue(row: Int32) -> String;
+native func NightWheel_ScreenSelected() -> Int32;
+native func NightWheel_ScreenSelect(row: Int32);
+native func NightWheel_ScreenRowLit(row: Int32) -> Bool;
+native func NightWheel_ScreenSection(row: Int32) -> String;
+native func NightWheel_TakeScriptActions() -> Int32;
+native func NightWheel_ScreenColumn(row: Int32) -> Int32;
+native func NightWheel_ScreenBoostRow() -> Int32;
+native func NightWheel_BoostPercent() -> Int32;
+native func NightWheel_BoostAdjust(steps: Int32);
+native func NightWheel_BoostWanted() -> Bool;
+native func NightWheel_ScriptHeld() -> Int32;
+native func NightWheel_Throttle() -> Float;
+native func NightWheel_Brake() -> Float;
+native func NightWheel_SetAutopilot(on: Bool);
+native func NightWheel_ScreenStatus() -> String;
+native func NightWheel_ScreenHints() -> String;
 
-public class WheelDriveStartupRates extends ScriptableTweak {
+public class NightWheelSteeringRates extends ScriptableTweak {
     protected cb func OnApply() -> Void {
-        let multiplier = WheelDriveTest_SteeringSpeed();
+        let multiplier = NightWheel_SteeringSpeed();
         let names: array<String>;
         ArrayPush(names, ".turnUpdateInputFastChangeSpeed");
         ArrayPush(names, ".turnUpdateInputSlowChangeSpeed");
@@ -57,7 +57,7 @@ public class WheelDriveStartupRates extends ScriptableTweak {
             }
             TweakDBManager.UpdateRecord(base);
         }
-        WheelDriveTest_Event(s"startup rates: \(ArraySize(records)) drive models, \(changed) values multiplied by \(FloatToString(multiplier))");
+        NightWheel_Event(s"startup rates: \(ArraySize(records)) drive models, \(changed) values multiplied by \(FloatToString(multiplier))");
     }
 }
 
@@ -65,10 +65,10 @@ public class WheelDriveStartupRates extends ScriptableTweak {
 @wrapMethod(PauseMenuGameController)
 private func PopulateMenuItemList() -> Void {
     wrappedMethod();
-    this.AddMenuItem(WheelDriveTestService.EntryLabel(), n"OnWheelDriveOpen");
+    this.AddMenuItem(NightWheelService.EntryLabel(), n"OnNightWheelOpen");
     this.m_menuListController.Refresh();
-    WheelDriveTest_Event("wheel-entry-added");
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    NightWheel_Event("wheel-entry-added");
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
     if IsDefined(service) {
         service.SetMenuRoot(this.GetRootWidget());
     }
@@ -76,17 +76,17 @@ private func PopulateMenuItemList() -> Void {
 
 @wrapMethod(PauseMenuGameController)
 protected cb func OnMenuItemActivated(index: Int32, target: ref<ListItemController>) -> Bool {
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
     if IsDefined(service) && service.IsScreenOpen() {
         return true;
     }
     let data = target.GetData() as PauseMenuListItemData;
-    if IsDefined(data) && Equals(data.label, WheelDriveTestService.EntryLabel()) {
-        WheelDriveTest_Event("wheel-entry-activated");
+    if IsDefined(data) && Equals(data.label, NightWheelService.EntryLabel()) {
+        NightWheel_Event("wheel-entry-activated");
         if IsDefined(service) {
             service.OpenScreen();
         } else {
-            WheelDriveTest_Event("wheel-service-missing");
+            NightWheel_Event("wheel-service-missing");
         }
         return true;
     }
@@ -96,10 +96,10 @@ protected cb func OnMenuItemActivated(index: Int32, target: ref<ListItemControll
 // Going back cancels a bind or leaves the page, in place of closing the pause menu.
 @wrapMethod(PauseMenuGameController)
 protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
     if IsDefined(service) && service.IsScreenOpen() && e.IsAction(n"back") {
-        WheelDriveTest_Event("wheel-back");
-        WheelDriveTest_ScreenCommand(5);
+        NightWheel_Event("wheel-back");
+        NightWheel_ScreenCommand(5);
         return true;
     }
     return wrappedMethod(e);
@@ -108,17 +108,17 @@ protected cb func OnGlobalRelease(e: ref<inkPointerEvent>) -> Bool {
 // The same for the pause menu scenario's own back handler.
 @wrapMethod(MenuScenario_PauseMenu)
 protected cb func OnBack() -> Bool {
-    let service = GameInstance.GetScriptableServiceContainer().GetService(n"WheelDriveTestService") as WheelDriveTestService;
+    let service = GameInstance.GetScriptableServiceContainer().GetService(n"NightWheelService") as NightWheelService;
     if IsDefined(service) && service.IsScreenOpen() {
-        WheelDriveTest_Event("wheel-back-scenario");
-        WheelDriveTest_ScreenCommand(5);
+        NightWheel_Event("wheel-back-scenario");
+        NightWheel_ScreenCommand(5);
         return true;
     }
     return wrappedMethod();
 }
 
-public class WheelDriveTestTick extends DelayCallback {
-    public let service: wref<WheelDriveTestService>;
+public class NightWheelTick extends DelayCallback {
+    public let service: wref<NightWheelService>;
 
     public func Call() {
         if IsDefined(this.service) {
@@ -127,7 +127,7 @@ public class WheelDriveTestTick extends DelayCallback {
     }
 }
 
-public class WheelDriveTestService extends ScriptableService {
+public class NightWheelService extends ScriptableService {
     private let m_active: Bool;
     private let m_driving: Bool;
     private let m_listening: wref<PlayerPuppet>;
@@ -172,7 +172,7 @@ public class WheelDriveTestService extends ScriptableService {
     }
 
     private cb func OnLoad() {
-        WheelDriveTest_Event("script-loaded");
+        NightWheel_Event("script-loaded");
 
         let callbacks = GameInstance.GetCallbackSystem();
         callbacks.RegisterCallback(n"Session/Ready", this, n"OnSessionReady");
@@ -183,7 +183,7 @@ public class WheelDriveTestService extends ScriptableService {
     }
 
     private cb func OnSessionReady(event: ref<GameSessionEvent>) {
-        WheelDriveTest_Event("session-ready");
+        NightWheel_Event("session-ready");
         if !this.m_active {
             this.m_active = true;
             this.ScheduleTick();
@@ -192,13 +192,13 @@ public class WheelDriveTestService extends ScriptableService {
 
     private cb func OnSessionPause(event: ref<GameSessionEvent>) {
         this.m_paused = true;
-        WheelDriveTest_Event("session-pause");
+        NightWheel_Event("session-pause");
         this.StartPauseUpdates();
     }
 
     private cb func OnSessionResume(event: ref<GameSessionEvent>) {
         this.m_paused = false;
-        WheelDriveTest_Event("session-resume");
+        NightWheel_Event("session-resume");
         this.HideAll();
     }
 
@@ -207,8 +207,8 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_paused = false;
         this.m_driving = false;
         this.m_listening = null;
-        WheelDriveTest_SetDriving(false);
-        WheelDriveTest_Event("session-end");
+        NightWheel_SetDriving(false);
+        NightWheel_Event("session-end");
         this.HideAll();
     }
 
@@ -219,25 +219,25 @@ public class WheelDriveTestService extends ScriptableService {
         }
         switch event.GetKey() {
             case EInputKey.IK_Up:
-                WheelDriveTest_ScreenCommand(1);
+                NightWheel_ScreenCommand(1);
                 break;
             case EInputKey.IK_Down:
-                WheelDriveTest_ScreenCommand(2);
+                NightWheel_ScreenCommand(2);
                 break;
             case EInputKey.IK_Enter:
-                WheelDriveTest_ScreenCommand(3);
+                NightWheel_ScreenCommand(3);
                 break;
             case EInputKey.IK_Delete:
-                WheelDriveTest_ScreenCommand(4);
+                NightWheel_ScreenCommand(4);
                 break;
             case EInputKey.IK_Period:
-                WheelDriveTest_ScreenCommand(5);
+                NightWheel_ScreenCommand(5);
                 break;
             case EInputKey.IK_Left:
-                WheelDriveTest_BoostAdjust(-1);
+                NightWheel_BoostAdjust(-1);
                 break;
             case EInputKey.IK_Right:
-                WheelDriveTest_BoostAdjust(1);
+                NightWheel_BoostAdjust(1);
                 break;
             default:
                 break;
@@ -258,12 +258,12 @@ public class WheelDriveTestService extends ScriptableService {
         let inMenu = this.IsInMenu();
         if NotEquals(inMenu, this.m_inMenu) {
             this.m_inMenu = inMenu;
-            WheelDriveTest_Event(s"in-menu: \(inMenu)");
+            NightWheel_Event(s"in-menu: \(inMenu)");
         }
         let driving = !inMenu && IsDefined(player) && VehicleComponent.IsDriver(game, player);
-        WheelDriveTest_SetDriving(driving);
+        NightWheel_SetDriving(driving);
         if driving {
-            let actions = WheelDriveTest_TakeScriptActions();
+            let actions = NightWheel_TakeScriptActions();
             if actions != 0 {
                 this.RunRadioActions(player, actions);
             }
@@ -277,12 +277,12 @@ public class WheelDriveTestService extends ScriptableService {
             }
             if this.m_autopilot {
                 this.m_autopilot = false;
-                WheelDriveTest_SetAutopilot(false);
+                NightWheel_SetAutopilot(false);
             }
         }
         if NotEquals(driving, this.m_driving) {
             this.m_driving = driving;
-            WheelDriveTest_Event(driving ? "driving-on" : "driving-off");
+            NightWheel_Event(driving ? "driving-on" : "driving-off");
             if driving {
                 this.StartListening(player);
             }
@@ -303,8 +303,8 @@ public class WheelDriveTestService extends ScriptableService {
         let on = board.GetBool(GetAllBlackboardDefs().Vehicle.IsAutopilotOn);
         if NotEquals(on, this.m_autopilot) {
             this.m_autopilot = on;
-            WheelDriveTest_SetAutopilot(on);
-            WheelDriveTest_Event(s"autopilot: \(on)");
+            NightWheel_SetAutopilot(on);
+            NightWheel_Event(s"autopilot: \(on)");
         }
     }
 
@@ -330,19 +330,19 @@ public class WheelDriveTestService extends ScriptableService {
         let now = EngineTime.ToFloat(GameInstance.GetSimTime(GetGameInstance()));
         let elapsed = now - this.m_lastBoostTime;
         this.m_lastBoostTime = now;
-        if !WheelDriveTest_BoostWanted() || this.m_autopilot {
+        if !NightWheel_BoostWanted() || this.m_autopilot {
             this.EndBoost("released");
             if speed > this.m_topSeen && now - this.m_lastBoostEnd > 15.0 {
                 this.m_topSeen = speed;
             }
             return;
         }
-        let percent = Cast<Float>(WheelDriveTest_BoostPercent());
+        let percent = Cast<Float>(NightWheel_BoostPercent());
         if !this.m_boosting {
             this.m_boosting = true;
             this.m_boostPeak = speed;
             this.m_boostLimit = MaxF(this.m_topSeen, speed) * (1.0 + percent / 100.0);
-            WheelDriveTest_Event(s"boost: on at \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
+            NightWheel_Event(s"boost: on at \(FloatToString(speed)), limit \(FloatToString(this.m_boostLimit)), fastest seen \(FloatToString(this.m_topSeen)), strength \(FloatToString(percent))");
         }
         if speed > this.m_boostPeak {
             this.m_boostPeak = speed;
@@ -374,7 +374,7 @@ public class WheelDriveTestService extends ScriptableService {
         }
         let game = GetGameInstance();
         // A fresh press of Climb starts flight when it is off.
-        let held = WheelDriveTest_ScriptHeld();
+        let held = NightWheel_ScriptHeld();
         let climbHeld = (held & 128) != 0;
         let descendHeld = (held & 256) != 0;
         let climbPressed = climbHeld && !this.m_flightClimbHeld;
@@ -413,13 +413,13 @@ public class WheelDriveTestService extends ScriptableService {
         // points, and a little drag slows it when coasting.
         let along = this.m_flightVX * aheadX + this.m_flightVY * aheadY;
         let across = this.m_flightVX * sideX + this.m_flightVY * sideY;
-        let boostPercent = Cast<Float>(WheelDriveTest_BoostPercent());
-        let boosting = WheelDriveTest_BoostWanted();
-        let thrust = WheelDriveTest_Throttle() * 15.0;
+        let boostPercent = Cast<Float>(NightWheel_BoostPercent());
+        let boosting = NightWheel_BoostWanted();
+        let thrust = NightWheel_Throttle() * 15.0;
         if boosting {
             thrust += MinF(6.0 + boostPercent * 0.12, 30.0);
         }
-        along += (thrust - WheelDriveTest_Brake() * 25.0) * elapsed;
+        along += (thrust - NightWheel_Brake() * 25.0) * elapsed;
         along -= along * 0.1 * elapsed;
         let limit = boosting ? 70.0 * (1.0 + boostPercent / 100.0) : 70.0;
         along = ClampF(along, 0.0, MaxF(limit, along - 30.0 * elapsed));
@@ -511,7 +511,7 @@ public class WheelDriveTestService extends ScriptableService {
         this.m_flightLastYaw = vehicle.GetWorldYaw();
         this.m_flightYawRate = 0.0;
         this.m_flightGroundHeld = 0.0;
-        WheelDriveTest_Event(s"flight: on at height \(FloatToString(begin.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
+        NightWheel_Event(s"flight: on at height \(FloatToString(begin.Z)), speed \(FloatToString(vehicle.GetCurrentSpeed()))");
     }
 
     private func Push(vehicle: ref<VehicleObject>, at: Vector4, x: Float, y: Float, z: Float) {
@@ -525,14 +525,14 @@ public class WheelDriveTestService extends ScriptableService {
     private func EndFlight(reason: String) {
         if this.m_flying {
             this.m_flying = false;
-            WheelDriveTest_Event(s"flight: off, \(reason)");
+            NightWheel_Event(s"flight: off, \(reason)");
         }
     }
 
     private func EndBoost(reason: String) {
         if this.m_boosting {
             this.m_boosting = false;
-            WheelDriveTest_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
+            NightWheel_Event(s"boost: off, \(reason), peak \(FloatToString(this.m_boostPeak))");
         }
     }
 
@@ -546,11 +546,11 @@ public class WheelDriveTestService extends ScriptableService {
         if (actions & 1) != 0 {
             let on = vehicle.IsRadioReceiverActive();
             vehicle.ToggleRadioReceiver(!on);
-            WheelDriveTest_Event(s"radio: was on=\(on), toggled");
+            NightWheel_Event(s"radio: was on=\(on), toggled");
         }
         if (actions & 2) != 0 {
             vehicle.NextRadioReceiverStation();
-            WheelDriveTest_Event(s"radio: next, index \(vehicle.GetCurrentRadioIndex())");
+            NightWheel_Event(s"radio: next, index \(vehicle.GetCurrentRadioIndex())");
         }
         if (actions & 4) != 0 {
             let index = Cast<Int32>(vehicle.GetCurrentRadioIndex());
@@ -559,7 +559,7 @@ public class WheelDriveTestService extends ScriptableService {
                 let previous = EnumInt(RadioStationDataProvider.GetRadioStationByUIIndex(position - 1));
                 vehicle.SetRadioReceiverStation(Cast<Uint32>(previous));
             }
-            WheelDriveTest_Event(s"radio: previous from position \(position), index \(vehicle.GetCurrentRadioIndex())");
+            NightWheel_Event(s"radio: previous from position \(position), index \(vehicle.GetCurrentRadioIndex())");
         }
         if (actions & 8) != 0 {
             this.ChangeRadioVolume(1);
@@ -573,7 +573,7 @@ public class WheelDriveTestService extends ScriptableService {
         let settings = GameInstance.GetSettingsSystem(GetGameInstance());
         let volume = settings.GetVar(n"/audio/volume", n"CarRadioVolume") as ConfigVarInt;
         if !IsDefined(volume) {
-            WheelDriveTest_Event("radio: volume setting not found");
+            NightWheel_Event("radio: volume setting not found");
             return;
         }
         let value = volume.GetValue() + direction * volume.GetStepValue();
@@ -582,7 +582,7 @@ public class WheelDriveTestService extends ScriptableService {
         if settings.NeedsConfirmation() {
             settings.ConfirmChanges();
         }
-        WheelDriveTest_Event(s"radio: volume \(value)");
+        NightWheel_Event(s"radio: volume \(value)");
     }
 
     // In a menu such as the map, the wheel must stay out of the way, or its steering makes the game
@@ -597,19 +597,19 @@ public class WheelDriveTestService extends ScriptableService {
         if !IsDefined(this.m_listening) {
             player.RegisterInputListener(this, n"TurnX");
             this.m_listening = player;
-            WheelDriveTest_Event("listening-for-steering-action");
+            NightWheel_Event("listening-for-steering-action");
         }
     }
 
     protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
         if Equals(ListenerAction.GetName(action), n"TurnX") {
             this.m_turn = ListenerAction.GetValue(action);
-            WheelDriveTest_SteeringAction(this.m_turn);
+            NightWheel_SteeringAction(this.m_turn);
         }
     }
 
     private func ScheduleTick() {
-        let tick = new WheelDriveTestTick();
+        let tick = new NightWheelTick();
         tick.service = this;
         GameInstance.GetDelaySystem(GetGameInstance()).DelayCallback(tick, 0.0, false);
     }
@@ -633,7 +633,7 @@ public class WheelDriveTestService extends ScriptableService {
         }
         let layer = this.MenuLayer();
         if !IsDefined(layer) {
-            WheelDriveTest_Event("menu-layer-missing");
+            NightWheel_Event("menu-layer-missing");
             return;
         }
         let host = this.NewText(32);
@@ -715,10 +715,10 @@ public class WheelDriveTestService extends ScriptableService {
         }
         let layer = this.MenuLayer();
         if !IsDefined(layer) {
-            WheelDriveTest_Event("menu-layer-missing");
+            NightWheel_Event("menu-layer-missing");
             return;
         }
-        WheelDriveTest_ScreenOpen();
+        NightWheel_ScreenOpen();
 
         let body = "base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily";
         let heading = "base\\gameplay\\gui\\fonts\\orbitron\\orbitron.inkfontfamily";
@@ -743,18 +743,18 @@ public class WheelDriveTestService extends ScriptableService {
 
         ArrayClear(this.m_rowValues);
         ArrayClear(this.m_rowMarks);
-        let count = WheelDriveTest_ScreenRowCount();
-        let boostRow = WheelDriveTest_ScreenBoostRow();
+        let count = NightWheel_ScreenRowCount();
+        let boostRow = NightWheel_ScreenBoostRow();
         let columnY: array<Float>;
         ArrayPush(columnY, 100.0);
         ArrayPush(columnY, 100.0);
         let columnW = 1280.0;
         let row = 0;
         while row < count {
-            let column = WheelDriveTest_ScreenColumn(row);
+            let column = NightWheel_ScreenColumn(row);
             let x = Cast<Float>(column) * (columnW + 80.0);
             let y = columnY[column];
-            let section = WheelDriveTest_ScreenSection(row);
+            let section = NightWheel_ScreenSection(row);
             if StrLen(section) > 0 {
                 y += 16.0;
                 let band = this.AddRect(content, x, y, columnW, 62.0, new HDRColor(0.05, 0.08, 0.11, 1.0));
@@ -771,7 +771,7 @@ public class WheelDriveTestService extends ScriptableService {
             mark.RegisterToCallback(n"OnHoverOver", this, n"OnRowHover");
             ArrayPush(this.m_rowMarks, mark);
 
-            this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(WheelDriveTest_ScreenRowLabel(row));
+            this.AddText(content, body, 36, x + 20.0, y, 620.0, 68.0, this.Red(), false).SetText(NightWheel_ScreenRowLabel(row));
 
             let boxX = x + 640.0;
             let boxW = 620.0;
@@ -816,36 +816,36 @@ public class WheelDriveTestService extends ScriptableService {
             this.m_menuRoot.SetVisible(false);
         }
         this.UpdateScreen();
-        WheelDriveTest_Event("wheel-screen-open");
+        NightWheel_Event("wheel-screen-open");
     }
 
     protected cb func OnBoostDown(event: ref<inkPointerEvent>) -> Bool {
         if event.IsAction(n"click") {
-            WheelDriveTest_BoostAdjust(-1);
+            NightWheel_BoostAdjust(-1);
         }
     }
 
     protected cb func OnBoostUp(event: ref<inkPointerEvent>) -> Bool {
         if event.IsAction(n"click") {
-            WheelDriveTest_BoostAdjust(1);
+            NightWheel_BoostAdjust(1);
         }
     }
 
     protected cb func OnRowHover(event: ref<inkPointerEvent>) -> Bool {
-        WheelDriveTest_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
+        NightWheel_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
     }
 
     protected cb func OnRowRelease(event: ref<inkPointerEvent>) -> Bool {
         if event.IsAction(n"click") {
-            WheelDriveTest_Event("wheel-row-clicked");
-            WheelDriveTest_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
-            WheelDriveTest_ScreenCommand(3);
+            NightWheel_Event("wheel-row-clicked");
+            NightWheel_ScreenSelect(StringToInt(NameToString(event.GetCurrentTarget().GetName())));
+            NightWheel_ScreenCommand(3);
         }
     }
 
     private func HideScreen() {
         if IsDefined(this.m_screen) {
-            WheelDriveTest_ScreenClose();
+            NightWheel_ScreenClose();
             let layer = this.MenuLayer();
             if IsDefined(layer) {
                 layer.GetVirtualWindow().RemoveChild(this.m_screen);
@@ -862,7 +862,7 @@ public class WheelDriveTestService extends ScriptableService {
             if IsDefined(this.m_menuRoot) {
                 this.m_menuRoot.SetVisible(true);
             }
-            WheelDriveTest_Event("wheel-screen-closed");
+            NightWheel_Event("wheel-screen-closed");
         }
     }
 
@@ -882,25 +882,25 @@ public class WheelDriveTestService extends ScriptableService {
         if !IsDefined(this.m_screen) {
             return;
         }
-        if !WheelDriveTest_ScreenTick() {
+        if !NightWheel_ScreenTick() {
             this.HideScreen();
             return;
         }
-        let selected = WheelDriveTest_ScreenSelected();
+        let selected = NightWheel_ScreenSelected();
         let row = 0;
         while row < ArraySize(this.m_rowValues) {
-            this.m_rowValues[row].SetText(WheelDriveTest_ScreenRowValue(row));
-            if WheelDriveTest_ScreenRowLit(row) {
+            this.m_rowValues[row].SetText(NightWheel_ScreenRowValue(row));
+            if NightWheel_ScreenRowLit(row) {
                 this.m_rowMarks[row].SetOpacity(0.7);
             } else {
                 this.m_rowMarks[row].SetOpacity(row == selected ? 0.22 : 0.03);
             }
             row += 1;
         }
-        let percent = WheelDriveTest_BoostPercent();
+        let percent = NightWheel_BoostPercent();
         this.m_boostValue.SetText(s"\(percent)%");
         this.m_boostFill.SetSize(new Vector2(460.0 * Cast<Float>(percent) / 200.0, 56.0));
-        this.m_status.SetText(WheelDriveTest_ScreenStatus());
-        this.m_hints.SetText(WheelDriveTest_ScreenHints());
+        this.m_status.SetText(NightWheel_ScreenStatus());
+        this.m_hints.SetText(NightWheel_ScreenHints());
     }
 }

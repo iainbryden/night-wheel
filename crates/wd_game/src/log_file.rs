@@ -1,5 +1,6 @@
-//! Writes test results on its own thread, so no file write ever runs on the game's thread
-//! or the wheel reader. Failing to log must never disturb the game.
+//! Writes the local log on its own thread, so no file write ever runs on the game's thread or the
+//! wheel reader. Failing to log must never disturb the game. Each launch starts a new file and keeps
+//! the previous one, and a file stops growing at a size limit. Nothing is ever sent anywhere.
 
 use crate::shared;
 use std::fs::{self, File, OpenOptions};
@@ -10,10 +11,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use wd_core::config;
 
 const SUMMARY_EVERY: Duration = Duration::from_secs(1);
 const STOP_WAIT: Duration = Duration::from_millis(1500);
 const STOP_POLL: Duration = Duration::from_millis(20);
+const MAX_LOG_BYTES: u64 = 20 * 1024 * 1024;
 
 static SENDER: OnceLock<Sender<String>> = OnceLock::new();
 
@@ -23,14 +26,20 @@ pub struct Logger {
 }
 
 fn path() -> Option<PathBuf> {
-    let base = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(base).join("WheelDrive").join("load-test.log"))
+    Some(config::settings_folder()?.join("night-wheel.log"))
 }
 
+/// Starts this launch's file, keeping the last one beside it.
 fn open() -> Option<File> {
     let path = path()?;
     fs::create_dir_all(path.parent()?).ok()?;
+    let _ = fs::rename(&path, path.with_extension("old.log"));
     OpenOptions::new().create(true).append(true).open(path).ok()
+}
+
+/// Whether a line still fits under the size limit.
+fn has_room(written: u64, line: u64) -> bool {
+    written.saturating_add(line) <= MAX_LOG_BYTES
 }
 
 /// Keeps one entry on one line, so a stray value cannot forge another entry.
@@ -48,12 +57,15 @@ fn format_line(millis: u128, message: &str) -> String {
     format!("{millis} {clean}\n")
 }
 
-fn write_line(file: &mut Option<File>, message: &str) {
+fn write_line(file: &mut Option<File>, written: &mut u64, message: &str) {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_millis());
     if let Some(file) = file {
-        let _ = file.write_all(format_line(millis, message).as_bytes());
+        let line = format_line(millis, message);
+        if has_room(*written, line.len() as u64) && file.write_all(line.as_bytes()).is_ok() {
+            *written += line.len() as u64;
+        }
     }
 }
 
@@ -70,14 +82,15 @@ impl Logger {
         let _ = SENDER.set(sender);
         let thread = std::thread::spawn(move || {
             let mut file = open();
+            let mut written = 0;
             let mut next = Instant::now() + SUMMARY_EVERY;
             loop {
                 let wait = next.saturating_duration_since(Instant::now());
                 match receiver.recv_timeout(wait) {
-                    Ok(message) => write_line(&mut file, &message),
+                    Ok(message) => write_line(&mut file, &mut written, &message),
                     Err(RecvTimeoutError::Timeout) => {
                         if let Some(line) = shared::stats_line() {
-                            write_line(&mut file, &line);
+                            write_line(&mut file, &mut written, &line);
                         }
                         next = Instant::now() + SUMMARY_EVERY;
                         if stop.load(Ordering::Relaxed) {
@@ -88,7 +101,7 @@ impl Logger {
                 }
             }
             while let Ok(message) = receiver.try_recv() {
-                write_line(&mut file, &message);
+                write_line(&mut file, &mut written, &message);
             }
         });
         Self { stop, thread }
@@ -109,7 +122,15 @@ impl Logger {
 
 #[cfg(test)]
 mod tests {
-    use super::format_line;
+    use super::{MAX_LOG_BYTES, format_line, has_room};
+
+    #[test]
+    fn the_log_stops_at_its_limit() {
+        assert!(has_room(0, 10));
+        assert!(has_room(MAX_LOG_BYTES - 10, 10));
+        assert!(!has_room(MAX_LOG_BYTES - 9, 10));
+        assert!(!has_room(u64::MAX, 1));
+    }
 
     #[test]
     fn a_line_has_time_and_message() {

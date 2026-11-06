@@ -21,6 +21,12 @@ pub const FORMAT_VERSION: u32 = 1;
 
 const BINDING_PREFIX: &str = "binding.";
 
+/// The settings folder's name under `%LOCALAPPDATA%`.
+const SETTINGS_FOLDER: &str = "NightWheel";
+/// The folder test builds used, and the files worth keeping from it. Its logs stay behind.
+const OLD_SETTINGS_FOLDER: &str = "WheelDrive";
+const OLD_SETTINGS_FILES: [&str; 3] = ["profile.cfg", "profile.cfg.bak", "steering-speed.txt"];
+
 /// Saved names of functions that no longer exist. Older files may hold them, and that must not make
 /// the whole file unusable. Saving drops them.
 const RETIRED_BINDINGS: [&str; 1] = ["hover"];
@@ -351,6 +357,38 @@ impl fmt::Display for LoadError {
 
 impl std::error::Error for LoadError {}
 
+/// The folder that holds settings and the log.
+pub fn settings_folder() -> Option<PathBuf> {
+    Some(PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join(SETTINGS_FOLDER))
+}
+
+/// The main settings file.
+pub fn profile_path() -> Option<PathBuf> {
+    Some(settings_folder()?.join("profile.cfg"))
+}
+
+/// Copies settings from the old folder when the new one has none, and returns how many files it
+/// copied. The old folder is left as it is. A failure only means starting without those settings.
+pub fn adopt_old_settings() -> usize {
+    let Some(new) = settings_folder() else {
+        return 0;
+    };
+    let Some(old) = new.parent().map(|base| base.join(OLD_SETTINGS_FOLDER)) else {
+        return 0;
+    };
+    copy_settings(&old, &new)
+}
+
+fn copy_settings(old: &Path, new: &Path) -> usize {
+    if new.join(OLD_SETTINGS_FILES[0]).exists() || fs::create_dir_all(new).is_err() {
+        return 0;
+    }
+    OLD_SETTINGS_FILES
+        .iter()
+        .filter(|name| fs::copy(old.join(name), new.join(name)).is_ok())
+        .count()
+}
+
 fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut name = OsString::from(path.as_os_str());
     name.push(suffix);
@@ -436,6 +474,39 @@ mod tests {
 
     fn axis(usage: u16) -> AxisId {
         AxisId { page: 1, usage }
+    }
+
+    fn empty_folders(name: &str) -> (PathBuf, PathBuf) {
+        let base =
+            std::env::temp_dir().join(format!("wd_core_adopt_{}_{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (old, new) = (base.join("old"), base.join("new"));
+        fs::create_dir_all(&old).unwrap();
+        (old, new)
+    }
+
+    #[test]
+    fn old_settings_are_copied_and_the_originals_stay() {
+        let (old, new) = empty_folders("copy");
+        fs::write(old.join("profile.cfg"), "saved").unwrap();
+        fs::write(old.join("load-test.log"), "log").unwrap();
+        assert_eq!(copy_settings(&old, &new), 1);
+        assert_eq!(
+            fs::read_to_string(new.join("profile.cfg")).unwrap(),
+            "saved"
+        );
+        assert!(old.join("profile.cfg").exists());
+        assert!(!new.join("load-test.log").exists());
+    }
+
+    #[test]
+    fn old_settings_never_replace_new_ones() {
+        let (old, new) = empty_folders("keep");
+        fs::create_dir_all(&new).unwrap();
+        fs::write(old.join("profile.cfg"), "old").unwrap();
+        fs::write(new.join("profile.cfg"), "new").unwrap();
+        assert_eq!(copy_settings(&old, &new), 0);
+        assert_eq!(fs::read_to_string(new.join("profile.cfg")).unwrap(), "new");
     }
 
     #[test]

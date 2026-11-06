@@ -63,8 +63,8 @@ fn initial_screen() -> Screen {
 }
 
 fn settings_path() -> Option<PathBuf> {
-    let base = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(base).join("WheelDrive").join("profile.cfg"))
+    config::adopt_old_settings();
+    config::profile_path()
 }
 
 impl SetupApp {
