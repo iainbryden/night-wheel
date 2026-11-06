@@ -13,3 +13,4 @@
 
 # Packages
 /dist/
+__pycache__/

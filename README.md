@@ -86,6 +86,10 @@ The `wd_` crate names are internal and predate the product name.
 
 This is a new implementation written from behaviour requirements, public documentation and observation of the unmodified game and wheel, without reading any other wheel or gameplay mod. `evidence/SOURCES.csv` lists every outside source.
 
+## Notices
+
+Night Wheel is an unofficial fan project. It isn't affiliated with or endorsed by CD PROJEKT RED, Logitech or Sony. Their names and trademarks belong to them and are used here only to say what the mod works with. The mod is free and must not be sold or put behind a paywall. Use it at your own risk.
+
 ## License
 
-[MIT](LICENSE). Libraries built into the package keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE). Libraries built into the package keep their own licenses, with their texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

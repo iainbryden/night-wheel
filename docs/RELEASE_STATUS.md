@@ -47,7 +47,7 @@ Release requirements:
 5. Detect conflicting wheel mods and explain them.
 6. Add an opt-in diagnostic summary for support.
 7. Review the TweakXL dependency formally, because it has no decision record of its own.
-8. Include the full license texts for bundled Rust libraries. `THIRD_PARTY_NOTICES.md` lists them but doesn't contain the texts.
+8. Check CD PROJEKT RED's current User Agreement and game EULA, including points 72 to 130 of the agreement, and the hosting site's rules. Keep the mod free. Insert into `options.json` at install time and never ship a copy of it.
 9. Check the name on Nexus Mods and for trademarks, and review the platform's publishing policy at release time.
 10. Test the package on a clean install.
 11. Make the settings page say why the wheel isn't working: no calibration, disconnected, unsupported mode or failed hook.
