@@ -42,6 +42,55 @@ native func NightWheel_SliderNumber(index: Int32) -> Float;
 native func NightWheel_SliderSet(index: Int32, number: Float);
 native func NightWheel_ScreenHints() -> String;
 
+// The WHEEL tab's labels are plain text, which the game's menu marks as not translated. This removes
+// that mark from any text under a widget, and leaves all other text alone.
+public func NightWheel_CleanLabels(widget: ref<inkWidget>) {
+    let text = widget as inkText;
+    if IsDefined(text) {
+        let shown = text.GetText();
+        if StrFindFirst(StrUpper(shown), "NOT LOCALIZED>") >= 0 {
+            let label = StrAfterFirst(shown, ">");
+            while StrBeginsWith(label, " ") {
+                label = StrAfterFirst(label, " ");
+            }
+            text.SetText(label);
+        }
+        return;
+    }
+    let parent = widget as inkCompoundWidget;
+    if IsDefined(parent) {
+        let index = 0;
+        while index < parent.GetNumChildren() {
+            NightWheel_CleanLabels(parent.GetWidgetByIndex(index));
+            index += 1;
+        }
+    }
+}
+
+@wrapMethod(SettingsSelectorController)
+public func Setup(entry: ref<ConfigVar>, isPreGame: Bool) -> Void {
+    wrappedMethod(entry, isPreGame);
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsCategoryController)
+public func Setup(label: CName) -> Void {
+    wrappedMethod(label);
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsMainGameController)
+private func PopulateSettingsData() -> Void {
+    wrappedMethod();
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
+@wrapMethod(SettingsMainGameController)
+private func PopulateCategories(idx: Int32) -> Void {
+    wrappedMethod(idx);
+    NightWheel_CleanLabels(this.GetRootWidget());
+}
+
 public class NightWheelSteeringRates extends ScriptableTweak {
     protected cb func OnApply() -> Void {
         let multiplier = NightWheel_SteeringSpeed();

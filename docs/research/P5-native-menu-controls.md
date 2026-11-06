@@ -90,3 +90,15 @@ Chosen by the user. Version 0.25.0, plus `scripts/settings_tab.py`, which insert
 - Without the tab, the mod's saved values still apply.
 - The settings page keeps its own sliders for now, so the two can be compared.
 - This is the first time this project changes a base game file rather than adding files.
+
+### Run of 0.25.0, 2026-11-06
+
+Approved by the user; checksums verified. Log kept as `out/game-before/night-wheel-run37.log`. No new crash report appeared when the log was read, with the game still open.
+
+- **The tab works.** The WHEEL tab appears at the end of the top row and fits, and the game draws and runs its rows. The user reports that A and D and ESC work. The screenshot also shows the DEFAULTS button and the Restore Defaults prompt, not yet reported as tried. Whether the mouse can slide the rows isn't reported either.
+- **Values.** The rows showed 360, 1, 2 and 200, the saved values. `UserSettings.json` holds them under `/wheel/driving`, so the game stores these like its own settings.
+- **Labels.** Each plain text label is shown with a `<NOT LOCALIZED>` prefix, including the tab name and section title.
+
+### Label cleanup
+
+Version 0.25.1, not run in the game. After the menu builds its tab, section headers and rows, a small function removes that prefix from any text under them. Descriptions show on hover, and this doesn't cover them yet. If a menu fills a label later than these hooks run, the prefix would remain. A proper translation entry would avoid this but needs a further framework or game file.
