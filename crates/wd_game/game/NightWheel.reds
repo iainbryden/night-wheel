@@ -523,6 +523,13 @@ public class NightWheelService extends ScriptableService {
             this.m_flightGroundHeld += elapsed;
             if this.m_flightGroundHeld >= 0.5 {
                 this.EndFlight("descend held at ground");
+                // The physics barely see the car move during flight, so it would stop dead. One push
+                // hands over its forward speed, up to what it has reached on the road, so a fast
+                // landing can't launch it. The floor of 20 matches boost's, and is provisional.
+                let carried = MinF(along, MaxF(this.m_topSeen, 20.0));
+                let carry = carried * vehicle.GetTotalMass();
+                this.Push(vehicle, vehicle.GetWorldPosition(), aheadX * carry, aheadY * carry, 0.0);
+                NightWheel_Event(s"flight: landed at \(FloatToString(along)), carried \(FloatToString(carried))");
                 return;
             }
         } else {

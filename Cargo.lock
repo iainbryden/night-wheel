@@ -2104,11 +2104,11 @@ dependencies = [
 
 [[package]]
 name = "wd_core"
-version = "0.21.2"
+version = "0.21.3"
 
 [[package]]
 name = "wd_device"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "wd_core",
  "windows",
@@ -2116,7 +2116,7 @@ dependencies = [
 
 [[package]]
 name = "wd_diag"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "wd_device",
  "windows",
@@ -2124,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "wd_game"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "red4ext-rs",
  "wd_core",
@@ -2134,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "wd_setup"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "eframe",
  "wd_core",

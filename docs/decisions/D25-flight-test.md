@@ -153,3 +153,7 @@ Version 0.21.0, not run in the game. The flight mode button is removed, as agree
 - Whether time stops in every menu. If it doesn't, pushes stop while physics runs and the car would fall.
 - World streaming at height and speed, collisions with buildings, and game logic for falling vehicles. If flight stops at height, nothing softens the fall.
 - A landing test relies on stopping, so it could end in mid-air if the car hangs at near zero vertical speed for half a second.
+
+## Keeping speed through a landing
+
+Requested by the user. Version 0.21.3, not run in the game. Ending flight by holding Descend at the ground now gives the car one push along its heading. The push hands over its forward speed, capped at the fastest speed seen on the road, or 20 in the game's speed units if that is higher. Sideways and vertical motion aren't carried. Physics pushes under-delivered in the early flight tests, so the car may keep only part of its speed, and the log records the speed at landing and the amount carried.
