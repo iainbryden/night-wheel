@@ -1,48 +1,90 @@
-# Wheel mod (working title)
+# Night Wheel
 
-An independently written Logitech G29 driving mod for Cyberpunk 2077 on Windows. It does not work in the game yet.
+A Logitech G29 driving mod for Cyberpunk 2077 on Windows, written independently in Rust and redscript. It has not been released. [docs/RELEASE_STATUS.md](docs/RELEASE_STATUS.md) lists what works, what doesn't exist yet and what blocks a release.
+
+## What it does today
+
+- Steers and drives with the G29, using calibrated steering and pedals.
+- Has a **WHEEL SETTINGS** page in the pause menu, where you bind wheel controls to functions with one press.
+- Controls vehicle functions, the camera and the radio from the wheel.
+- Adds boost, with an adjustable strength.
+- Adds flight: **Climb** lifts the car and keeps rising while held. **Descend** lowers it, and holding it at the ground for half a second ends flight. Flight doesn't check for buildings ahead, so the car can pass through them.
+
+Force feedback, wheel LEDs and manual shifting don't exist yet. The mod sends nothing to the wheel.
+
+## Requirements
+
+Tested on patch 2.5 (Steam) with these versions, which you install separately:
+
+| Dependency | Tested version |
+|---|---|
+| [RED4ext](https://github.com/WopsS/RED4ext) | 1.31.0 |
+| [redscript](https://github.com/jac3km4/redscript) | 0.5.32 |
+| [Codeware](https://github.com/psiberx/cp2077-codeware) | 1.21.2 |
+| [TweakXL](https://github.com/psiberx/cp2077-tweak-xl) | 1.12.0 |
+
+Logitech G HUB must be running. These G HUB settings were used in testing: operating range 240, sensitivity 24, and the centering spring for non force feedback games off.
+
+## Install
+
+1. Close the game and unpack the package into the game folder, so that `r6` and `red4ext` merge with the existing folders.
+2. Run `red4ext\plugins\NightWheel\NightWheelSetup.exe` and calibrate the wheel. Without a calibration the wheel doesn't drive, and the game keeps its normal input.
+3. Start the game, pause, and choose **WHEEL SETTINGS** to bind your controls.
+
+## Uninstall
+
+1. Close the game.
+2. Delete `r6\scripts\NightWheel` and `red4ext\plugins\NightWheel` from the game folder.
+3. To remove your settings and logs as well, delete `%LOCALAPPDATA%\NightWheel`.
+
+The mod doesn't edit saves. Do not use it alongside another wheel mod.
+
+## Settings and logs
+
+Settings and logs stay on your PC in `%LOCALAPPDATA%\NightWheel`. Nothing is uploaded.
+
+| File | Contents |
+|---|---|
+| `profile.cfg`, `profile.cfg.bak` | Calibration, bindings and boost strength, with a backup |
+| `steering-speed.txt` | Optional steering speed multiplier from 1 to 10. It applies at the next game start, and the default is 10 |
+| `night-wheel.log`, `night-wheel.old.log` | This launch's log and the last one. Each stops growing at 20 MB |
+
+Settings from test builds in `%LOCALAPPDATA%\WheelDrive` are copied once, if the new folder has none. The old folder isn't changed.
+
+## Build from source
+
+Needs [rustup](https://rustup.rs/), the Visual Studio C++ build tools, CMake 3.21 or newer and LLVM, all on `PATH`. If `libclang.dll` isn't found, set `LIBCLANG_PATH` to its folder. `rust-toolchain.toml` selects the Rust version.
+
+```
+cargo test --locked --workspace
+cargo clippy --locked --workspace --all-targets -- -D warnings
+```
+
+To build the package in `dist\`:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\package.ps1
+```
+
+The Rust checks don't cover the game script. redscript compiles `NightWheel.reds` against the game's own scripts when the game starts, so a script error only shows up there unless you run `redscript-cli` against a copy of the game's `final.redscripts`.
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `crates/wd_core` | Calibration, configuration and HID value logic. No dependencies, no `unsafe` |
+| `crates/wd_core` | Calibration, settings and binding logic. No game or Windows code |
 | `crates/wd_device` | Read-only wheel input through Windows Raw Input |
-| `crates/wd_diag` | Standalone wheel diagnostic |
-| `crates/wd_setup` | Setup app: device view, calibration, response settings and assignments |
-| `crates/wd_game` | First game load test: a plugin and script that only log |
-| `evidence/`, `docs/` | Source and dependency registers, test results, decisions, reviews |
+| `crates/wd_game` | The game plugin, and `game/NightWheel.reds`, the game script |
+| `crates/wd_setup` | The setup and calibration app |
+| `crates/wd_diag` | A standalone wheel diagnostic that only reads |
+| `scripts/` | Packaging and the third-party list |
+| `docs/`, `evidence/` | Decisions, records, research, source and dependency registers, and test results |
 
-## Build
+The `wd_` crate names are internal and predate the product name.
 
-Needs [rustup](https://rustup.rs/), the Visual Studio C++ build tools, CMake 3.21 or newer and LLVM, all on `PATH`. If `libclang.dll` isn't found, set `LIBCLANG_PATH` to its folder. `rust-toolchain.toml` selects the Rust version.
+## How it was built
 
-```
-cargo build --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-```
-
-## Run the setup app
-
-```
-cargo run -p wd_setup
-```
-
-The app sends nothing to the wheel and nothing to the game. Settings are saved to `%LOCALAPPDATA%\WheelDrive\profile.cfg`, with a backup beside it.
-
-## Run the diagnostic
-
-The diagnostic only reads. It uses Windows Raw Input, never opens the device for writing, and sends no motor or LED output.
-
-```
-cargo run -p wd_diag                       # live screen; Ctrl+C to quit
-cargo run -p wd_diag -- --list             # controllers and their controls
-cargo run -p wd_diag -- --plain            # one line per change
-cargo run -p wd_diag -- --plain --seconds 30
-```
-
-Control names such as X or Rz come from what the device reports, not from which physical control they are.
+This is a new implementation written from behaviour requirements, public documentation and observation of the unmodified game and wheel, without reading any other wheel or gameplay mod. `evidence/SOURCES.csv` lists every outside source.
 
 ## License
 

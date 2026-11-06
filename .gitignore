@@ -10,3 +10,6 @@
 /diagnostics/
 *.log
 *.dmp
+
+# Packages
+/dist/

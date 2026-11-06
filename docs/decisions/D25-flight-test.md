@@ -140,6 +140,11 @@ Approved by the user; files replaced and hash-checked. User report: "Works well.
 
 - 16 flights: 11 ended by holding Descend at the ground, and 3 by the flight mode button's landing. The mode button's landing was started 5 times.
 - There is still no check for buildings ahead, which is the likely reason for going through surfaces while flying. That cause isn't proven.
+- None of the mode button's landings looks like a rescue from ground the rays couldn't see. The ones sampled were close to the ground or were pressed again to restart flight.
+
+## Review build
+
+Version 0.21.0, not run in the game. The flight mode button is removed, as agreed with the user once two buttons proved better, and that removes the mid-air landing too. An old saved `binding.hover` is ignored and dropped on the next save. Flight now logs only when it starts and ends. Over ground neither ray can see, Descend can't end flight, and leaving the car does.
 
 ## Unknowns
 
