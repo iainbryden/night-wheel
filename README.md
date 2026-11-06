@@ -53,7 +53,7 @@ Settings from test builds in `%LOCALAPPDATA%\WheelDrive` are copied once, if the
 
 ## Build from source
 
-Needs [rustup](https://rustup.rs/), the Visual Studio C++ build tools, CMake 3.21 or newer and LLVM, all on `PATH`. If `libclang.dll` isn't found, set `LIBCLANG_PATH` to its folder. `rust-toolchain.toml` selects the Rust version.
+Needs [rustup](https://rustup.rs/), the Visual Studio C++ build tools, CMake 3.21 or newer and LLVM, all on `PATH`. If `libclang.dll` isn't found, set `LIBCLANG_PATH` to its folder. `rust-toolchain.toml` selects the Rust version. Use a short folder path: a build under a very long temporary path failed in CMake's compiler check, and the same commit built from a shorter one.
 
 ```
 cargo test --locked --workspace
