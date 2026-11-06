@@ -24,7 +24,7 @@ Tested on patch 2.5 (Steam) with these versions, which you install separately:
 | [Codeware](https://github.com/psiberx/cp2077-codeware) | 1.21.2 |
 | [TweakXL](https://github.com/psiberx/cp2077-tweak-xl) | 1.12.0 |
 
-Logitech G HUB must be running. The aim is to leave G HUB at sensitivity 50 and operating range 900 and set the feel on the WHEEL SETTINGS page, but the page defaults aren't tuned yet. Until they are, these G HUB settings work on the test PC: operating range 210, sensitivity 4, and the centering spring for non force feedback games off.
+Logitech G HUB must be running. Set the Cyberpunk 2077 profile in G HUB to sensitivity 50 and operating range 900, and set the feel on the WHEEL SETTINGS page. The defaults there are steering range 360, center response 1.0 and steering speed x2. Steering range assumes G HUB is at 900. Other G HUB values also work, but the feel changes. Keep the centering spring for non force feedback games off.
 
 ## Install
 

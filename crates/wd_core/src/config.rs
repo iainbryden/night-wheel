@@ -63,6 +63,9 @@ pub const BOOST_PERCENT_RANGE: std::ops::RangeInclusive<u32> = 25..=200;
 /// The full travel of the wheel with G HUB at its widest operating range. The steering range is
 /// measured against this, because the mod can't read G HUB's setting.
 pub const GHUB_NEUTRAL_RANGE: u32 = 900;
+/// The steering range for a new calibration, chosen by feel at G HUB sensitivity 50 and range 900.
+/// A file saved before ranges existed stays at the full travel, because it was tuned in G HUB.
+pub const DEFAULT_STEERING_RANGE: u32 = 360;
 /// The steering ranges a player may choose, in degrees.
 pub const STEERING_RANGE: std::ops::RangeInclusive<u32> = 180..=GHUB_NEUTRAL_RANGE;
 /// The steering speed multipliers a player may choose.
@@ -155,7 +158,7 @@ impl Config {
             brake: calibrated.brake,
             bindings: Bindings::default(),
             boost_percent: DEFAULT_BOOST_PERCENT,
-            steering_range: GHUB_NEUTRAL_RANGE,
+            steering_range: DEFAULT_STEERING_RANGE,
             steering_speed: None,
         };
         if let Some(previous) = previous {

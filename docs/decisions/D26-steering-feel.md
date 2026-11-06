@@ -36,3 +36,7 @@ The user was told that the mod's jump to about 35% stick might make center touch
 ## Limits
 
 The mod can only narrow what G HUB allows. A user with G HUB set narrower than the slider gets less range than shown, and the mod can't detect it. The page's layout grew by one section, and it's still untested on ultrawide and other UI scales.
+
+## Result, 2026-11-06
+
+User report, with G HUB confirmed at sensitivity 50 and range 900 by a screenshot: "works well" at steering range 360, center response 1.0 and steering speed x2. So the extreme G HUB values aren't needed, and center response stayed at its neutral value. These are now the defaults for a new calibration, and steering speed x2 is the default where nothing has been chosen. One user's feel on one wheel set them, so they stay open to change. An older settings file without a range stays at the full travel, because it was tuned in G HUB. Why sensitivity 4 and range 210 seemed necessary before isn't known.

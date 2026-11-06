@@ -19,11 +19,11 @@ Date: 2026-11-05. Version 0.22.0, on branch `steering-feel`. See [the code revie
 | Camera controls | Not confirmed | No report recorded |
 | Autodrive | Not confirmed | The script's check hasn't been confirmed in play |
 | Calibration | Works in a separate app only | User report covers its wheel reading; the full flow isn't recorded |
-| Steering speed choice | Slider built, untested | Default is 10. The user's value is 2, and no final default is chosen; `docs/decisions/D26-steering-feel.md` |
+| Steering speed choice | Works | Default is x2, by user report; `docs/decisions/D26-steering-feel.md` |
 | Force feedback | **Not built** | Research only: `docs/research/P2-force-feedback.md` |
 | Wheel LEDs | **Not built** | Route undecided |
 | Manual and Auto transmission | **Not built** | Feasibility not studied |
-| Steering range and center response on the in-game page | Built, untested, defaults not tuned | `docs/decisions/D26-steering-feel.md` |
+| Steering range and center response on the in-game page | Works, defaults set by one user's feel | User report; `docs/decisions/D26-steering-feel.md` |
 | Profiles | **Not built** | One settings file |
 
 ## Known problems
@@ -51,7 +51,7 @@ Release requirements:
 9. Check the name on Nexus Mods and for trademarks, and review the platform's publishing policy at release time.
 10. Test the package on a clean install.
 11. Make the settings page say why the wheel isn't working: no calibration, disconnected, unsupported mode or failed hook.
-12. Tune the steering defaults, so a new user can leave G HUB neutral (D26).
+12. Try the steering defaults on another wheel or with another player (D26).
 13. Test the settings page at 16:9, ultrawide and other UI scales.
 
 ## Review notes

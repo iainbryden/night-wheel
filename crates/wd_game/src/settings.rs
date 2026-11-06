@@ -557,8 +557,8 @@ mod tests {
         assert_eq!(config.steering.exponent, 4.0);
         assert!(!slider_adjust(1, 1, &mut config));
 
-        assert!(slider_adjust(2, -8, &mut config));
-        assert_eq!(config.steering_speed, Some(2.0));
+        assert!(slider_adjust(2, 1, &mut config));
+        assert_eq!(config.steering_speed, Some(3.0));
         slider_adjust(2, 1000, &mut config);
         assert_eq!(config.steering_speed, Some(10.0));
         config.validate().unwrap();
@@ -569,7 +569,7 @@ mod tests {
         let mut config = steering_config();
         assert_eq!(slider_value(0, &config), "900 DEGREES");
         assert_eq!(slider_value(1, &config), "1.0");
-        assert_eq!(slider_value(2, &config), "x10");
+        assert_eq!(slider_value(2, &config), "x2");
         assert_eq!(slider_fraction(0, &config), 1.0);
         assert_eq!(slider_fraction(1, &config), 0.0);
         assert_eq!(slider_value(9, &config), "");

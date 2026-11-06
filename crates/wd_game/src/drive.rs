@@ -20,8 +20,9 @@ pub struct Output {
 const STICK_DEAD_END: f64 = 0.35;
 const STICK_FULL: f64 = 0.90;
 
-/// The steering speed multiplier when no valid choice exists. The only value proven to keep up.
-pub const DEFAULT_STEERING_SPEED: f32 = 10.0;
+/// The steering speed multiplier when no choice has been made, chosen by feel on the test PC. The
+/// tires kept up with the wheel at this value.
+pub const DEFAULT_STEERING_SPEED: f32 = 2.0;
 /// No value above the highest one tried, and none below the game's own speed.
 const STEERING_SPEED_RANGE: std::ops::RangeInclusive<f32> = 1.0..=10.0;
 
